@@ -1,0 +1,14 @@
+{
+  "name": "Mehl",
+  "scopeName": "source.mehl",
+  "fileTypes": [
+    "mehl"
+  ],
+  "patterns": [
+    {
+      "match": "[0-9]*",
+      "name": "constant.numeric.mehl"
+    }
+  ],
+  "repository": {}
+}

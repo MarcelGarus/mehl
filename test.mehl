@@ -1,0 +1,97 @@
+# This is the standard library of Mehl.
+
+# Very basic primitives
+:identical [:true] [:identical primitive] :fun primitive
+:type [:true] [:type primitive] :fun primitive
+:fun [:true] [:fun primitive] :fun primitive
+:let [:true] [:let primitive] fun
+
+# Direct stack manipulation
+:pop [:true] [:_ let] fun
+:copy [:true] [:a let a a] fun
+
+# Basic type stuff
+:any? [:true] [:true] fun
+:number? [any?] [type :number identical] fun
+:string? [any?] [type :string identical] fun
+:symbol? [any?] [type :symbol identical] fun
+:list? [any?] [type :list identical] fun
+:map? [any?] [type :map identical] fun
+
+# Integers
+:= [:true] [identical] fun # TODO
+
+# Bool
+:and [:true = :a let :true = a true] [:true] fun
+:and [:true = :false =] [:true] fun
+:and [:false = :false =] [:false] fun
+:and [:false = :false =] [:true] fun
+
+:or [:true = :true = and] [:true] fun
+:or [:true = :false = and] [:true] fun
+:or [:false = :false = and] [:false] fun
+:or [:false = :false = and] [:true] fun
+:bool? [any] [:a let a :true = a :false = or] fun
+:not [bool?] []
+
+# If
+#:if [:true = list? and ] []
+
+## Code ##
+
+:true type
+
+#:true
+#  [ 1 ]
+#  [ 2 ]
+#  if
+
+:true bool?
+
+#[1 2 3] # List
+#{:a 23, :b "Hello"} # Map
+
+#5 :a let
+#a a +
+
+#:true copy
+
+## New Mehl ##
+
+-3 abs
+9 root
+[2, 2] + negate
+"hello" uppercase
+4 . root
+"https://github.com/marcelgarus/mehl" repo fetch-contributors [., [name]] map [., ","] join
+
+
+[:the-answer, [unit], [42]] fun
+
+[3 seconds wait] async await
+
+["Hello, world!" print] 3 times
+
+[read eval print] loop
+
+---
+
+Mehl programming language – Marcel's Experimental Helpful Language
+
+Primitives:
+
+* Number
+* Name
+* Symbol
+* Arg
+* Lambda
+* Tuples
+
+IDE:
+
+* Syntax highlighting
+* Formatting
+* Evaluation
+* Jump to definition
+* Pure vs Impure
+* Other goodies
