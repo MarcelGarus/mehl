@@ -1,0 +1,11 @@
+(:fun, [:true], [(:fun, .) primitive]) (:fun, .) primitive
+(:type, [:true], [(:type, .) primitive]) fun
+(:print, [:true], [(:print, .) primitive]) fun
+#(:let, [:true], [()]) fun
+
+# {:blub "Hey"} print
+#(:foo, [:true], ["Hello, world!" print]) fun
+
+"Hello, world!" type print
+"Hello, world!" (., (3, .), .) print
+#(:foo, 5) let
