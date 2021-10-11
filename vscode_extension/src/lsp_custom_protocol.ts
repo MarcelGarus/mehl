@@ -2,7 +2,7 @@ import { NotificationType, Range } from "vscode-languageclient";
 
 export class PublishTypeLabelsNotification {
   public static type = new NotificationType<TypeLabelsParams>(
-    "candy/textDocument/publishTypeLabels"
+    "mehl/textDocument/publishTypeLabels"
   );
 }
 export interface TypeLabelsParams {

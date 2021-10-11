@@ -25,14 +25,14 @@
   "contributes": {
     "commands": [],
     "configuration": {
-      "title": "🍞 Mehl",
+      "title": "Mehl",
       "properties": {
-        "candy.corePath": {
+        "mehl.corePath": {
           "type": "string",
           "description": "Path to the Mehl core library.",
           "scope": "machine-overridable"
         },
-        "candy.languageServerCommand": {
+        "mehl.languageServerCommand": {
           "type": "string",
           "default": "",
           "markdownDescription": "Command to start the Mehl language server.",

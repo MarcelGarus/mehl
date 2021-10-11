@@ -38,7 +38,7 @@ export function deactivate(): Thenable<void> | undefined {
 // The following code is taken (and slightly modified) from https://github.com/Dart-Code/Dart-Code
 async function spawnServer(): Promise<StreamInfo> {
   const process = safeSpawn();
-  console.info(`    PID: ${process.pid}`);
+  console.info(`Spawned server with PID ${process.pid}.`);
 
   const reader = process.stdout.pipe(new LoggingTransform("<=="));
   const writer = new LoggingTransform("==>");
@@ -55,9 +55,10 @@ type SpawnedProcess = child_process.ChildProcess & {
   stderr: stream.Readable;
 };
 function safeSpawn(): SpawnedProcess {
+  console.info("Spawning the language server.");
   const configuration = vs.workspace.getConfiguration("mehl");
 
-  let command: [string, string[]] = ["mehl.exe", ["lsp"]];
+  let command: [string, string[]] = ["cargo", ["run", "--", "lsp"]];
   const languageServerCommand = configuration.get<string>(
     "languageServerCommand"
   );
@@ -69,11 +70,13 @@ function safeSpawn(): SpawnedProcess {
     command = [parts[0], parts.slice(1)];
   }
 
-  const corePath = configuration.get<string | null>("corePath");
-  command[1].push(`--core-path="${corePath}"`);
+  // const corePath = configuration.get<string | null>("corePath");
+  // command[1].push(`--core-path="${corePath}"`);
 
+  console.info(`Spawning child process using this command: ${command[0]} ${command[1]}`);
   return child_process.spawn(command[0], command[1], {
     env: process.env,
+    cwd: "/projects/mehl/interpreter",
     shell: true,
   }) as SpawnedProcess;
 }
@@ -91,12 +94,6 @@ class LoggingTransform extends stream.Transform {
     callback: () => void
   ): void {
     let value = (chunk as Buffer).toString();
-    if (value.startsWith("Observatory listening on")) {
-      console.warn(value);
-      callback();
-      return;
-    }
-
     let toLog = this.onlyShowJson
       ? value
           .split("\r\n")

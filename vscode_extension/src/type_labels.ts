@@ -14,7 +14,7 @@ export class TypeLabelsDecorations implements vs.Disposable {
   private updateTimeout?: NodeJS.Timer;
 
   private readonly decorationType = vs.window.createTextEditorDecorationType({
-    after: { color: new vs.ThemeColor('candy.typeLabels') },
+    after: { color: new vs.ThemeColor('mehl.typeLabels') },
     rangeBehavior: vs.DecorationRangeBehavior.ClosedOpen,
   });
 
