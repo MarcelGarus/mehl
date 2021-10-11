@@ -1,11 +1,39 @@
-(:fun, [:true], [(:fun, .) primitive]) (:fun, .) primitive
-(:type, [:true], [(:type, .) primitive]) fun
-(:print, [:true], [(:print, .) primitive]) fun
-#(:let, [:true], [()]) fun
+# "Hello, world!"
 
-# {:blub "Hey"} print
-#(:foo, [:true], ["Hello, world!" print]) fun
+"Hello, world!" print
 
-"Hello, world!" type print
-"Hello, world!" (., (3, .), .) print
-#(:foo, 5) let
+
+# Adding numbers
+
+(1, 2) List[Int].+
+
+
+# Iterable with cycle, map, filter, take, do
+
+# { :name, :List.Iter, :in, Any, :out, Any, :body, [[]] } fun
+# An iterable: { :iter, [] }
+# { :name, :List. }
+
+# (1, 2, 3) List.Iter
+#   Iter.cycle
+#   [(., 2) Int.*] Iter.map
+#   [(., 10) Int.>] Iter.filter
+#   (., 5) Iter.take
+#   [print] Iter.do
+
+
+# Adding numbers
+
+#(1, 2) +
+#(1, 2, 3, 4, 5) (:iter-over-list, .) magic-primitive # TODO
+
+
+# Types
+
+#"Hello, world!" type print
+#"Hello, world!" (., (3, .), .) print
+
+
+# Variables
+
+#(5, :foo) let

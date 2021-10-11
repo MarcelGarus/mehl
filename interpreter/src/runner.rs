@@ -1,45 +1,56 @@
-use crate::expr::*;
+use crate::ast::*;
 use std::collections::HashMap;
 
-pub fn run(asts: Vec<Ast>) -> Expr {
-    Context::new().run_all(asts).dot
-}
-
 #[derive(Clone)]
-struct Context {
+pub struct RunContext {
     funs: Vec<Fun>,
-    dot: Expr,
+    pub dot: Ast,
 }
-impl Context {
-    fn new() -> Self {
+impl RunContext {
+    pub fn new() -> Self {
         Self {
             funs: vec![],
-            dot: Expr::unit(),
+            dot: Ast::unit(),
         }
     }
 }
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct Fun {
     name: String,
-    checker: Vec<Ast>,
+    type_in: Vec<Ast>,
+    type_out: Vec<Ast>,
+    docs: Option<String>,
+    panics_if: Option<String>,
     body: Vec<Ast>,
 }
 
-impl Context {
-    pub fn run_all(&self, asts: Vec<Ast>) -> Context {
+impl RunContext {
+    pub fn run_all(&self, code: Vec<Ast>) -> Self {
         let mut context = self.clone();
-        for ast in asts {
+        for ast in code {
             context = context.run(ast);
         }
         context
     }
 
-    pub fn run(&self, ast: Ast) -> Context {
+    pub fn run(&self, ast: Ast) -> Self {
         println!("Dot: {}", self.dot);
         match ast {
-            Ast::Number(number) => self.with_dot(Expr::Number(number)),
-            Ast::String(string) => self.with_dot(Expr::String(string)),
-            Ast::Symbol(symbol) => self.with_dot(Expr::Symbol(symbol)),
+            Ast::Number(_) | Ast::String(_) | Ast::Symbol(_) | Ast::Code(_) => self.with_dot(ast),
+            Ast::Map(map) => {
+                let mut expr_map = HashMap::new();
+                for (key, value) in map {
+                    expr_map.insert(key, self.run(value).dot);
+                }
+                self.with_dot(Ast::Map(expr_map))
+            }
+            Ast::List(list) => {
+                let mut expr_list = vec![];
+                for item in list {
+                    expr_list.push(self.run(item).dot);
+                }
+                self.with_dot(Ast::List(expr_list))
+            }
             Ast::Name(name) => {
                 if &name == "." {
                     self.clone()
@@ -47,34 +58,19 @@ impl Context {
                     self.handle_name(&name)
                 }
             }
-            Ast::List(list) => {
-                let mut expr_list = vec![];
-                for item in list {
-                    expr_list.push(self.run_all(item).dot);
-                }
-                self.with_dot(Expr::List(expr_list))
-            }
-            Ast::Map(map) => {
-                let mut expr_map = HashMap::new();
-                for (key, value) in map {
-                    expr_map.insert(key, self.run(value).dot);
-                }
-                self.with_dot(Expr::Map(expr_map))
-            }
-            Ast::Code(list) => self.with_dot(Expr::Code(list)),
         }
     }
 
-    fn with_dot(&self, dot: Expr) -> Context {
+    fn with_dot(&self, dot: Ast) -> Self {
         Self {
             dot,
             ..self.clone()
         }
     }
 
-    fn handle_name(&self, name: &str) -> Context {
+    fn handle_name(&self, name: &str) -> Self {
         match name {
-            "primitive" => self.primitive(),
+            "magic-primitive" => self.primitive(),
             name => {
                 let matching_funs = self
                     .funs
@@ -92,10 +88,10 @@ impl Context {
         // let expression = self.bindings.get(name).unwrap();
     }
 
-    fn primitive(&self) -> Context {
+    fn primitive(&self) -> Self {
         let args = match self.dot.clone() {
-            Expr::List(args) => args,
-            _ => panic!("Called primitive, but the dot is not a List: {}", self.dot),
+            Ast::List(args) => args,
+            _ => panic!("Called primitive, but the dot is not a list: {}", self.dot),
         };
         if args.len() != 2 {
             panic!(
@@ -104,7 +100,7 @@ impl Context {
             );
         }
         let name = match &args[0] {
-            Expr::Symbol(name) => name,
+            Ast::Symbol(name) => name,
             _ => panic!(
                 "Called primitive, but the dot's first item is not a symbol: {}",
                 self.dot
@@ -112,83 +108,163 @@ impl Context {
         };
         let context = self.with_dot(args[1].clone());
         match name.as_ref() {
-            "fun" => context.primitive_fun(),
-            // "identical" => context.primitive_identical(),
+            "List[Int].+" => context.primitive_add_list_of_ints(),
+            "fun" => match context.primitive_fun() {
+                Ok(context) => context,
+                Err(err) => panic!("{}\nDot: {}", err, context.dot),
+            },
+            "identical" => context.primitive_identical(),
+            "iter-over-list" => context.primitive_iter_over_list(),
             // "let" => context.primitive_let(),
             "print" => context.primitive_print(),
             "type" => context.primitive_type(),
             _ => panic!("Unknown primitive {}.", name),
         }
     }
-    // fn primitive_identical(&mut self) {
-    //     let is_identical = self.pop() == self.pop();
-    //     self.push(is_identical.into())
-    // }
-    fn primitive_fun(&self) -> Context {
+    fn primitive_add_list_of_ints(&self) -> Self {
         let args = match self.dot.clone() {
-            Expr::List(args) => args,
-            _ => panic!("Called fun, but the dot is not a List: {}", self.dot),
+            Ast::List(args) => args,
+            _ => panic!("Called fun, but the dot is not a list: {}", self.dot),
         };
-        if args.len() != 3 {
-            panic!(
-                "Called fun, but the dot doesn't contain exactly two items: {}",
-                self.dot
-            );
-        }
-        let name = match args[0].clone() {
-            Expr::Symbol(name) => name,
-            _ => panic!(
-                "Called fun, but the dot's first item is not a symbol: {}",
-                self.dot
-            ),
-        };
-        let checker = match args[1].clone() {
-            Expr::Code(code) => code,
-            _ => panic!(
-                "Called fun, but the dot's second item is not a code: {}",
-                self.dot
-            ),
-        };
-        let body = match args[2].clone() {
-            Expr::Code(code) => code,
-            _ => panic!(
-                "Called fun, but the dot's third item is not code: {}",
-                self.dot
-            ),
-        };
+        let sum = args
+            .iter()
+            .map(|arg| match arg {
+                Ast::Number(n) => n,
+                _ => panic!("Called add-numbers, but the list contains stuff other than numbers."),
+            })
+            .sum();
+        self.with_dot(Ast::Number(sum))
+    }
+    fn primitive_fun(&self) -> Result<Self, String> {
+        let args = self
+            .dot
+            .clone()
+            .as_map()
+            .ok_or("Called fun, but the dot is not a map.".to_string())?;
+        let name = args
+            .get_symbol("name")
+            .ok_or("Called fun, but the map doesn't contain a :name.".to_string())?
+            .clone()
+            .as_symbol()
+            .ok_or("Called fun, but the :name is not a symbol.".to_string())?;
+        let type_in = args
+            .get_symbol("in")
+            .clone()
+            .ok_or("Called fun, but no :in given.".to_string())?
+            .clone()
+            .as_code()
+            .ok_or("Called fun, but the :in is not code.")?;
+        let type_out = args
+            .get_symbol("out")
+            .ok_or("Called fun, but no :out given.".to_string())?
+            .clone()
+            .as_code()
+            .ok_or("Called fun, but the :out is not code.")?;
+        let docs = args
+            .get_symbol("docs")
+            .and_then(|docs| docs.clone().as_string());
+        let panics_if = args
+            .get_symbol("panics-if")
+            .and_then(|panics_if| panics_if.clone().as_string());
+        let body = args
+            .get_symbol("body")
+            .ok_or("Called fun, but no :body given.".to_string())?
+            .clone()
+            .as_code()
+            .ok_or("Called fun, but the :body is not code.".to_string())?;
 
-        println!("Defined function {}", name);
-        Context {
+        let fun = Fun {
+            name,
+            type_in,
+            type_out,
+            docs,
+            panics_if,
+            body,
+        };
+        println!("Defined function: {:?}", &fun);
+        Ok(Self {
             funs: {
                 let mut funs = self.funs.clone();
-                funs.push(Fun {
-                    name,
-                    checker,
-                    body,
-                });
+                funs.push(fun);
                 funs
             },
             ..self.clone()
-        }
+        })
     }
-    fn primitive_print(&self) -> Context {
-        println!("🌮> {}", self.dot);
-        self.with_dot(Expr::unit())
-    }
-    fn primitive_type(&self) -> Context {
-        let value = match self.dot {
-            Expr::Number(_) => "number",
-            Expr::String(_) => "string",
-            Expr::Symbol(_) => "symbol",
-            Expr::List(_) => "list",
-            Expr::Map(_) => "map",
-            Expr::Code(_) => "code",
+    fn primitive_identical(&self) -> Self {
+        let args = match self.dot.clone() {
+            Ast::List(args) => args,
+            _ => panic!("Called identical, but the dot is not a list: {}", self.dot),
         };
-        self.with_dot(Expr::Symbol(value.into()))
+        if args.len() != 2 {
+            panic!(
+                "Called identical, but the dot doesn't contain exactly two items: {}",
+                self.dot
+            );
+        }
+        let is_identical = args[0] == args[1];
+        self.with_dot(is_identical.into())
     }
+    fn primitive_iter_over_list(&self) -> Self {
+        let list = match self.dot.clone() {
+            Ast::List(list) => list,
+            _ => panic!("Bad input: {}", self.dot),
+        };
+
+        self.with_dot(Ast::List(vec![
+            list.first().expect("Bad input.").clone(),
+            Ast::List(list.into_iter().skip(1).collect()),
+        ]))
+    }
+    fn primitive_print(&self) -> Self {
+        println!("🌮> {}", self.dot);
+        self.with_dot(Ast::unit())
+    }
+    fn primitive_type(&self) -> Self {
+        let value = match self.dot {
+            Ast::Number(_) => "number",
+            Ast::String(_) => "string",
+            Ast::Symbol(_) => "symbol",
+            Ast::List(_) => "list",
+            Ast::Map(_) => "map",
+            Ast::Code(_) => "code",
+            Ast::Name(_) => {
+                panic!("Called primitive type on Name, but it should be executed to an expression.")
+            }
+        };
+        self.with_dot(Ast::Symbol(value.into()))
+    }
+    // fn primitive_val(&self) -> Self {
+    //     let args = match self.dot.clone() {
+    //         Ast::List(args) => args,
+    //         _ => panic!("Bad input: {}", self.dot),
+    //     };
+    //     if args.len() != 2 {
+    //         panic!("Bad input: {}", self.dot);
+    //     }
+    //     let name = match args[0].clone() {
+    //         Ast::Symbol(name) => name,
+    //         _ => panic!("Bad input: {}", self.dot),
+    //     };
+    //     let value = args[1].clone();
+
+    //     println!("Defined value {}", name);
+    //     Self {
+    //         funs: {
+    //             let mut funs = self.funs.clone();
+    //             funs.push(Fun {
+    //                 name,
+    //                 checker: vec![Ast::Code(vec![true.into()])],
+    //                 body: vec![value],
+    //             });
+    //             funs
+    //         },
+    //         ..self.clone()
+    //     }
+    // }
     // fn primitive_let(&mut self) {
     //     match (self.pop(), self.pop()) {
-    //         (Expr::Symbol(name), value) => {
+    //         (Ast::Symbol(name), value) => {
     //             self.lets.insert(name, value);
     //             println!("Definitions are now: {:?}", self.lets);
     //         }
@@ -200,15 +276,15 @@ impl Context {
     // }
     // fn primitive_add(&mut self) {
     //     match (self.pop(), self.pop()) {
-    //         (Expr::Number(a), Expr::Number(b)) => self.push(Expr::Number(a + b)),
+    //         (Ast::Number(a), Ast::Number(b)) => self.push(Ast::Number(a + b)),
     //         _ => panic!("Bad operands for +"),
     //     }
     // }
 }
 
-impl Into<Expr> for bool {
-    fn into(self) -> Expr {
+impl Into<Ast> for bool {
+    fn into(self) -> Ast {
         let text = if self { "true" } else { "false" };
-        Expr::Symbol(text.into())
+        Ast::Symbol(text.into())
     }
 }
