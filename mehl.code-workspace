@@ -1,0 +1,34 @@
+{
+    "folders": [
+        {
+            "name": "🍞 Interpeter",
+            "path": "interpreter"
+        },
+        {
+            "name": "📦 VS Code Extension",
+            "path": "vscode_extension"
+        },
+        {
+            "name": "🌍 Everything",
+            "path": "."
+        }
+    ],
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "vsc extension: run",
+                "type": "extensionHost",
+                "request": "launch",
+                "runtimeExecutable": "${execPath}",
+                "args": [
+                    "--extensionDevelopmentPath=${workspaceFolder:vscode_extension}"
+                ],
+                "outFiles": [
+                    "${workspaceFolder:vscode_extension}/out/**/*.js"
+                ],
+                "preLaunchTask": "${defaultBuildTask}"
+            }
+        ]
+    }
+}
