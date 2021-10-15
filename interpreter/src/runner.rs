@@ -129,7 +129,9 @@ impl Context {
             // "identical" => self.primitive_identical(arg),
             // "iter-over-list" => self.primitive_iter_over_list(arg),
             // "let" => self.primitive_let(arg),
+            "loop" => self.primitive_loop(arg),
             "print" => self.primitive_print(arg),
+            "wait" => self.primitive_wait(arg),
             // "type" => self.primitive_type(arg),
             _ => panic!("Unknown primitive {}.", name),
         }
@@ -163,6 +165,18 @@ impl Context {
         };
         println!("Defined function {:?}.", &fun.name);
         Ok(self.next(Some(fun), Expr::unit()))
+    }
+    fn primitive_loop(&self, arg: Expr) -> Self {
+        let code = arg.as_code().expect("loop needs code,");
+        let mut context = self.clone();
+        loop {
+            context = context.run(code.clone());
+        }
+    }
+    fn primitive_wait(&self, arg: Expr) -> Self {
+        let seconds = arg.as_number().expect("wait needs a number,");
+        std::thread::sleep(std::time::Duration::new(seconds as u64, 0));
+        self.clone()
     }
     // fn primitive_iter_over_list(&self) -> Self {
     //     let list = match self.dot.clone() {

@@ -1,7 +1,9 @@
 # "Hello, world!"
 
+[
 "Hello, world!" print
-
+5 wait
+] loop
 
 # Adding numbers
 
