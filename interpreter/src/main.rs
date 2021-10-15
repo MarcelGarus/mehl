@@ -45,11 +45,8 @@ async fn main() {
         };
 
         println!("Code: {}", format_code(&user));
-        // let expression = runner::RunContext::new()
-        //     .run_all(core_asts)
-        //     .run_all(user_asts)
-        //     .dot;
-        // println!("Expression: {}", expression);
+        let expression = runner::Context::new().run(core).run(user).dot();
+        println!("Expression: {}", expression);
     }
 
     if let Some(_) = matches.subcommand_matches("lsp") {
