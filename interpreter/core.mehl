@@ -1,58 +1,32 @@
 # Welcome to the Mehl core library!
 # This library is implicitly included at the start of every Mehl run. There are
-# comments throughout so you can simply read it from top to bottom like a book.
+# comments throughout so that you can read it from top to bottom like a book.
 
-# In Mehl, user-defined functions can't have the name `✨`. Instead, it's an
-# entry point for the Mehl interpreter to offer various compiler features that
-# would be impossible or impractical to implement directly.
-# Calls to these magic primitives have the form `(name, args) ✨`, where `name`
-# is the name of the function and `args` are necessary arguments to it. Calls
-# that have the wrong arguments or an unknown name will panic.
+# In Mehl, `✨` is the entry point for the Mehl interpreter to offer various
+# features that would be impossible or impractical to implement directly in Mehl
+# itself. Calls to these magic primitives have the following form:
+# `(primitive-name, args) ✨`
 
-# The most obvious example is the `fun` function, which defines a function in
-# the surrounding scope:
-
-{
-  :name, :fun,
-  :docs, "Defines a new function.",
-  #:panicsIf, "Some stuff happens.",
-  :body, [(:fun, .) ✨]
-} (:fun, .) ✨
-
-{
-  :name, :print,
-  :docs, "Prints something to stdout.",
-  :body, [(:print, .) ✨]
-} fun
-
-{
-  :name, :List[Int].+,
-  :in, [:true],
-  :out, [:true],
-  :docs, "Sums a list of integers.",
-  :body, [(:List[Int].+, .) ✨]
-} fun
+{ :name, :fun, :docs, "Defines a new function.", :body, [(:fun, .) ✨] } (:fun, .) ✨
+{ :name, :print, :docs, "Prints something to stdout.", :body, [(:print, .) ✨] } fun
+{ :name, :wait, :docs, "Waits an amount of seconds.", :body, [(:wait, .) ✨] } fun
+{ :name, :run, :docs, "Executes code.", :body, [(:run, .) ✨] } fun
+{ :name, :loop, :docs, "Executes code again and again.", :body, [(:loop, .) ✨] } fun
 
 #####
 
 # There is no built-in concept of types. Instead, arbitrary code can determine
-# whether something is a valid input and output of a function. This is analogous
-# to the notion of a "set" in mathematics, which is also defined as a thing
-# where you can determine for every given element whether it's inside or not.
-
-# The output constraints of functions can depend on the input. For example, a
-# function that always doubles the length of a list has an output condition that
-# depends on the input.
+# whether something is a valid input and output of a function.
 
 #{ :name, :identical?, :in, Any, :out, Any, :body, [(:identical, .) ✨] } fun
 #{ :name, Unit?, :in, [:true], :out, Bool, [(:, .) (:identical, .) ✨] } fun
 
-{ :name, :Any?, :in, [:true], :out, [:true], :body, [[:true]] } fun
+#{ :name, :Any?, :in, [:true], :out, [:true], :body, [[:true]] } fun
 
-{ :name, :Any, :in, [:true], :out, [:true], :body, [[:true]] } fun
+#{ :name, :Any, :in, [:true], :out, [:true], :body, [[:true]] } fun
 
-{ :name, :type, :in, Any, :out, Any, :body, [(:type, .) ✨] } fun
-{ :name, :Int, :in, Any, :out, Any, :body, [[:true]] } fun # (. type, :int) identical?
+#{ :name, :type, :in, Any, :out, Any, :body, [(:type, .) ✨] } fun
+#{ :name, :Int, :in, Any, :out, Any, :body, [[:true]] } fun # (. type, :int) identical?
 
 
 

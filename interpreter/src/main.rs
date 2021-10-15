@@ -29,23 +29,27 @@ async fn main() {
 
     if let Some(_) = matches.subcommand_matches("run") {
         println!("Running test.mehl.");
-        let code = std::fs::read_to_string("core.mehl").expect("File core.mehl not found.");
-        let core_asts = match Ast::parse_all(&code) {
-            Ok(it) => it,
-            Err(err) => panic!("Couldn't parse ASTs of core.mehl: {}", err),
+        let core = {
+            let code = std::fs::read_to_string("core.mehl").expect("File core.mehl not found.");
+            match Ast::parse_all(&code) {
+                Ok(it) => it,
+                Err(err) => panic!("Couldn't parse ASTs of core.mehl: {}", err),
+            }
         };
-        let code = std::fs::read_to_string("test.mehl").expect("File test.mehl not found.");
-        let user_asts = match Ast::parse_all(&code) {
-            Ok(it) => it,
-            Err(err) => panic!("Couldn't parse ASTs of test.mehl: {}", err),
+        let user = {
+            let code = std::fs::read_to_string("test.mehl").expect("File test.mehl not found.");
+            match Ast::parse_all(&code) {
+                Ok(it) => it,
+                Err(err) => panic!("Couldn't parse ASTs of test.mehl: {}", err),
+            }
         };
 
-        println!("Code: {}", format_code(&user_asts));
-        let expression = runner::RunContext::new()
-            .run_all(core_asts)
-            .run_all(user_asts)
-            .dot;
-        println!("Expression: {}", expression);
+        println!("Code: {}", format_code(&user));
+        // let expression = runner::RunContext::new()
+        //     .run_all(core_asts)
+        //     .run_all(user_asts)
+        //     .dot;
+        // println!("Expression: {}", expression);
     }
 
     if let Some(_) = matches.subcommand_matches("lsp") {

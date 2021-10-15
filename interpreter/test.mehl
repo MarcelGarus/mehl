@@ -5,7 +5,7 @@
 
 # Adding numbers
 
-(1, 2) List[Int].+
+#(1, 2) List[Int].+
 
 
 # Iterable with cycle, map, filter, take, do
