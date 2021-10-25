@@ -280,13 +280,13 @@ mod parse {
         }
     }
     fn is_valid_identifier_char(c: char) -> bool {
-        !c.is_whitespace() && !"[]{}(),:".chars().any(|it| it == c)
+        !c.is_whitespace() && "[]{}(),:".chars().all(|it| it != c)
     }
 
     fn symbol(input: &str) -> ParseResult<String> {
         if let Some(':') = input.chars().next() {
             match identifier(&input[1..]) {
-                NotApplicable => Parsed("".into(), input),
+                NotApplicable => Parsed("".into(), &input[1..]),
                 Parsed(identifier, input) => Parsed(identifier, input),
                 Error(_, _) => panic!("The identifier parser should never error."),
             }
@@ -386,6 +386,7 @@ mod parse {
     }
 
     fn ast(input: &str) -> ParseResult<Ast> {
+        println!("Parsing AST: {}", input);
         let parsers: Vec<fn(&str) -> ParseResult<Ast>> = vec![
             |input| number(input).map_result(|number| Ast::Number(number as i64)),
             |input| string(input).map_result(|string| Ast::String(string)),

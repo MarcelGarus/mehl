@@ -1,9 +1,40 @@
-# "Hello, world!"
+# Variables
+
+"Hello, world!" print
 
 [
-"Hello, world!" print
-5 wait
-] loop
+  "Hi from library!" print
+  {:name, :foo, :body, [ "Hi from foo!" print ]} fun
+  (:export, {:foo, :}) ✨
+] (:run-and-import, .) ✨
+foo
+
+###
+
+1000 wait
+
+[ "Hello, world!" print 5 wait ] loop
+
+# TODO
+# * imports (use)
+# * loop
+# * let
+# * panic
+# * ...
+# * bools
+# * logic
+# * math
+# * units
+# * iterate
+# * random
+# * input
+# * fibers
+# * http get
+# * FFI
+# * wrong-usage
+# * propagate-wrong-usage
+# * channels
+# * ambients
 
 # Adding numbers
 

@@ -7,11 +7,12 @@
 # itself. Calls to these magic primitives have the following form:
 # `(primitive-name, args) ✨`
 
-{ :name, :fun, :docs, "Defines a new function.", :body, [(:fun, .) ✨] } (:fun, .) ✨
-{ :name, :print, :docs, "Prints something to stdout.", :body, [(:print, .) ✨] } fun
+{ :name, :fun, :docs, "Defines a new function.", :body, [ (:fun-and-export, .) ✨ ] } (:fun, .) ✨
+{ :name, :print, :docs, "Prints to stdout.", :body, [(:print, .) ✨] } fun
 { :name, :wait, :docs, "Waits an amount of seconds.", :body, [(:wait, .) ✨] } fun
 { :name, :run, :docs, "Executes code.", :body, [(:run, .) ✨] } fun
 { :name, :loop, :docs, "Executes code again and again.", :body, [(:loop, .) ✨] } fun
+{ :name, :use, :docs, "Imports functions from a scope.", :body, [(:run-and-import, .) ✨] } fun
 
 #####
 
@@ -19,16 +20,9 @@
 # whether something is a valid input and output of a function.
 
 #{ :name, :identical?, :in, Any, :out, Any, :body, [(:identical, .) ✨] } fun
-#{ :name, Unit?, :in, [:true], :out, Bool, [(:, .) (:identical, .) ✨] } fun
-
-#{ :name, :Any?, :in, [:true], :out, [:true], :body, [[:true]] } fun
-
-#{ :name, :Any, :in, [:true], :out, [:true], :body, [[:true]] } fun
-
+#{ :name, Unit?, [(:, .) (:identical, .) ✨] } fun
 #{ :name, :type, :in, Any, :out, Any, :body, [(:type, .) ✨] } fun
 #{ :name, :Int, :in, Any, :out, Any, :body, [[:true]] } fun # (. type, :int) identical?
-
-
 
 #(:int.+, int? list?, int?, "Adds numbers.", [:add-ints ✨]) fun
 
@@ -37,10 +31,4 @@
 #(:list?, any?, [[(. type, :list) identical]]) fun
 #(:map?, any?, [[(. type, :map) identical]]) fun
 #(:exactly?, any? [:a[(.) identical]])
-
-#(:list-of?, any?, )
-
-#(:print, any?, [(:print, .) ✨]) fun # TODO
-#(:let, any?, [()]) fun # TODO
-
 #(:+, list?, [(:add-numbers, .) ✨]) fun # TODO

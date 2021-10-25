@@ -1,5 +1,4 @@
 mod ast;
-mod expr;
 mod runner;
 
 use ast::*;
@@ -36,6 +35,7 @@ async fn main() {
                 Err(err) => panic!("Couldn't parse ASTs of core.mehl: {}", err),
             }
         };
+        println!("Core parsed.");
         let user = {
             let code = std::fs::read_to_string("test.mehl").expect("File test.mehl not found.");
             match Ast::parse_all(&code) {
@@ -43,9 +43,14 @@ async fn main() {
                 Err(err) => panic!("Couldn't parse ASTs of test.mehl: {}", err),
             }
         };
+        println!("Test parsed.");
 
         println!("Code: {}", format_code(&user));
-        let expression = runner::Context::new().run(core).run(user).dot();
+        let mut fiber = runner::Fiber::new();
+        let expression = runner::Context::new(&mut fiber)
+            .run(&mut fiber, core)
+            .run(&mut fiber, user)
+            .dot;
         println!("Expression: {}", expression);
     }
 
