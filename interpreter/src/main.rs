@@ -47,7 +47,7 @@ async fn main() {
 
         println!("Code: {}", format_code(&user));
         let mut fiber = runner::Fiber::new();
-        let expression = runner::Context::new(&mut fiber)
+        let expression = runner::Context::root(&mut fiber)
             .run(&mut fiber, core)
             .run(&mut fiber, user)
             .dot;

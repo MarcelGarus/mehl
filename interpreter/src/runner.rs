@@ -6,16 +6,23 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 pub struct Fiber {
+    depth: u64,
     next_context_id: u64,
 }
 impl Fiber {
     pub fn new() -> Self {
-        Self { next_context_id: 0 }
+        Self {
+            depth: 0,
+            next_context_id: 0,
+        }
     }
     fn next_context_id(&mut self) -> u64 {
         let id = self.next_context_id;
         self.next_context_id += 1;
         id
+    }
+    fn log(&mut self, msg: &str) {
+        println!("{}{}", "  ".repeat(self.depth as usize), msg);
     }
 }
 
@@ -129,8 +136,7 @@ impl fmt::Display for Expr {
 #[derive(Clone)]
 pub struct Context {
     id: u64,
-    funs: HashMap<String, Rc<Fun>>,
-    exported_funs: HashMap<String, Rc<Fun>>,
+    funs: HashMap<String, Fun>,
     pub dot: Expr,
 }
 impl Eq for Context {}
@@ -140,21 +146,47 @@ impl PartialEq for Context {
     }
 }
 
+#[derive(Clone)]
 struct Fun {
     name: String,
     docs: Option<String>,
-    scope: Context,
-    body: Asts,
+    scope: Rc<Context>,
+    body: FunBody,
+    export_level: u16,
+}
+#[derive(Clone)]
+enum FunBody {
+    Primitive,
+    Code(Rc<Asts>),
+    Value(Rc<Expr>),
 }
 
 impl Context {
-    pub fn new(fiber: &mut Fiber) -> Self {
-        Self {
+    pub fn root(fiber: &mut Fiber) -> Self {
+        let context = Self {
             id: fiber.next_context_id(),
             funs: HashMap::new(),
-            exported_funs: HashMap::new(),
             dot: Expr::unit(),
-        }
+        };
+        let context = {
+            let mut funs = HashMap::new();
+            funs.insert(
+                "✨".into(),
+                Fun {
+                    name: "✨".into(),
+                    docs: Some("The primitive fun.".into()),
+                    scope: Rc::new(context),
+                    body: FunBody::Primitive,
+                    export_level: 0,
+                },
+            );
+            Self {
+                id: fiber.next_context_id(),
+                funs,
+                dot: Expr::unit(),
+            }
+        };
+        context
     }
 }
 
@@ -168,12 +200,12 @@ impl Context {
     }
 
     fn run_single(self, fiber: &mut Fiber, ast: Ast) -> Self {
-        println!(
+        fiber.log(&format!(
             "Running {} on {} (known: {:?})",
             format_code(&vec![ast.clone()]),
             self.dot,
             self.funs.keys().collect::<Vec<_>>(),
-        );
+        ));
         match ast {
             Ast::Number(number) => self.next(fiber, Expr::Number(number)),
             Ast::String(string) => self.next(fiber, Expr::String(string)),
@@ -181,20 +213,24 @@ impl Context {
             Ast::Map(map) => {
                 let mut expr_map = HashMap::new();
                 let context = self.clone();
+                fiber.depth += 1;
                 for (key, value) in map {
                     expr_map.insert(
                         context.clone().run(fiber, key).dot,
                         context.clone().run(fiber, value).dot,
                     );
                 }
+                fiber.depth -= 1;
                 self.next(fiber, Expr::Map(expr_map))
             }
             Ast::List(list) => {
                 let mut expr_list = vec![];
                 let context = self.clone();
+                fiber.depth += 1;
                 for item in list {
                     expr_list.push(context.clone().run(fiber, item).dot);
                 }
+                fiber.depth -= 1;
                 self.next(fiber, Expr::List(expr_list))
             }
             Ast::Code(asts) => self.clone().next(
@@ -205,35 +241,40 @@ impl Context {
                 },
             ),
             Ast::Name(name) => {
-                println!(
+                fiber.log(&format!(
                     "Calling fun {}. Known funs: {:?}",
                     &name,
                     self.funs.keys().collect::<Vec<_>>()
-                );
-                match name.as_str() {
-                    "." => self.clone(),
-                    "✨" => self.primitive(fiber),
-                    name => match self.funs.get(name) {
-                        Some(fun) => {
-                            println!("Entering fun {}.", name);
-                            let result = fun
-                                .scope
-                                .clone()
-                                .next(fiber, self.dot)
-                                .run(fiber, fun.body.clone());
-                            println!("Exiting fun {}.", name);
-                            let mut new_context = Self {
-                                dot: result.dot,
-                                ..self
-                            };
-                            for (name, fun) in result.exported_funs {
-                                new_context.funs.insert(name, fun);
-                            }
-                            new_context
-                        }
-                        None => panic!("Unknown name {}.", name),
-                    },
+                ));
+                if name == "." {
+                    return self.clone();
                 }
+                let fun = self
+                    .funs
+                    .get(&name)
+                    .expect(&format!("Unknown name {}.", &name));
+                fiber.depth += 1;
+                let context = (*fun.scope).clone().next(fiber, self.dot);
+                let context = match fun.body.clone() {
+                    FunBody::Primitive => context.primitive(fiber),
+                    FunBody::Code(code) => context.run(fiber, code.to_vec()),
+                    FunBody::Value(expr) => context.next(fiber, (*expr).clone()),
+                };
+                fiber.depth -= 1;
+                let mut next_context = Self {
+                    dot: context.dot,
+                    ..self
+                };
+                for (name, fun) in context.funs.clone() {
+                    if fun.export_level >= 1 {
+                        let mut fun = fun.clone();
+                        fun.export_level = fun.export_level - 1;
+                        next_context.funs.insert(name, fun);
+                    } else {
+                        fiber.log(&format!("Not exporting {}.", name));
+                    }
+                }
+                next_context
             }
         }
     }
@@ -242,7 +283,6 @@ impl Context {
         Self {
             id: fiber.next_context_id(),
             funs: self.funs,
-            exported_funs: self.exported_funs,
             dot,
         }
     }
@@ -266,8 +306,8 @@ impl Context {
         let arg = args[1].clone();
         let context = self.clone().next(fiber, arg.clone());
         match name.as_ref() {
-            "export" => context.primitive_export(),
-            "fun" => match context.primitive_fun() {
+            "export" => context.primitive_export(fiber),
+            "fun" => match context.primitive_fun(fiber) {
                 Ok(context) => context,
                 Err(err) => panic!("{}\nDot: {}", err, arg),
             },
@@ -288,7 +328,7 @@ impl Context {
             _ => panic!("Unknown primitive {}.", name),
         }
     }
-    fn primitive_export(mut self) -> Self {
+    fn primitive_export(mut self, fiber: &mut Fiber) -> Self {
         let args = self.dot.clone().as_map().expect("export expects a map.");
         let funs_to_export = args
             .keys()
@@ -298,17 +338,17 @@ impl Context {
                     .expect("export expects a map of symbols.")
             })
             .collect::<Vec<_>>();
-        println!("Exporting funs {:?}.", funs_to_export);
+        fiber.log(&format!("Exporting funs {:?}.", funs_to_export));
         for name in funs_to_export {
-            let fun = self.funs.get(&name).expect(&format!(
+            let fun = self.funs.get_mut(&name).expect(&format!(
                 "Tried to export fun {}, but that doesn't exist.",
                 name
             ));
-            self.exported_funs.insert(name, fun.clone());
+            fun.export_level += 1;
         }
         self
     }
-    fn primitive_fun(mut self) -> Result<Self, String> {
+    fn primitive_fun(mut self, fiber: &mut Fiber) -> Result<Self, String> {
         let args = self
             .dot
             .clone()
@@ -333,16 +373,17 @@ impl Context {
         let fun = Fun {
             name: name.clone(),
             docs,
-            scope: *scope,
-            body,
+            scope: Rc::new(*scope),
+            body: FunBody::Code(Rc::new(body)),
+            export_level: 0,
         };
         self.dot = Expr::unit();
-        self.funs.insert(name.clone(), Rc::new(fun));
-        println!(
+        self.funs.insert(name.clone(), fun);
+        fiber.log(&format!(
             "Defined function {:?}. Known funs: {:?}",
             &name,
             self.funs.keys().collect::<Vec<_>>()
-        );
+        ));
         Ok(self)
     }
     fn primitive_fun_and_export(self, fiber: &mut Fiber) -> Result<Self, String> {
@@ -360,9 +401,10 @@ impl Context {
             map
         };
         let context = self
-            .primitive_fun()?
+            .primitive_fun(fiber)?
             .next(fiber, Expr::Map(map))
-            .primitive_export();
+            .primitive_export(fiber)
+            .primitive_export(fiber);
         Ok(context)
     }
     fn primitive_get_key(mut self) -> Self {
@@ -383,7 +425,7 @@ impl Context {
         }
     }
     fn primitive_print(self, fiber: &mut Fiber) -> Self {
-        println!("🌮> {}", self.dot);
+        fiber.log(&format!("🌮> {}", self.dot));
         self.next(fiber, Expr::unit())
     }
     fn primitive_run_and_import(mut self, fiber: &mut Fiber) -> Self {
@@ -394,7 +436,7 @@ impl Context {
             .expect("run-and-import needs code");
         let context = scope.next(fiber, Expr::unit());
         let result = context.run(fiber, body);
-        for (name, fun) in result.exported_funs {
+        for (name, fun) in result.funs {
             self.funs.insert(name, fun);
         }
         self

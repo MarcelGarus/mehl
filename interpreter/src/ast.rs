@@ -386,7 +386,6 @@ mod parse {
     }
 
     fn ast(input: &str) -> ParseResult<Ast> {
-        println!("Parsing AST: {}", input);
         let parsers: Vec<fn(&str) -> ParseResult<Ast>> = vec![
             |input| number(input).map_result(|number| Ast::Number(number as i64)),
             |input| string(input).map_result(|string| Ast::String(string)),
