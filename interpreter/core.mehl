@@ -61,6 +61,10 @@
   (:use, .) ✨
   (:export-all, :) ✨
 ]) fun
+(:panic, "Crashes the program.", [(:panic, .) ✨]) fun
+(:..., "Crashes the program because some part of it is not implemented yet.", [
+  "Todo: A part of the program is not yet implemented." panic
+]) fun
 
 ###
 

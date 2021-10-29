@@ -5,23 +5,34 @@ use std::rc::Rc;
 
 use super::runtime::*;
 
+type RunResult = Result<Context, Expr>;
+fn error(kind: String, msg: String) -> Expr {
+    Expr::List(vec![Expr::Symbol(kind), Expr::String(msg)])
+}
+fn wrong_usage(msg: String) -> Expr {
+    error("wrong-usage".into(), msg)
+}
+fn unknown_function(msg: String) -> Expr {
+    error("unknown-fun".into(), msg)
+}
+
 impl Context {
-    pub fn run(self, runtime: &mut Runtime, code: Asts) -> Self {
+    pub fn run(self, runtime: &mut Runtime, code: Asts) -> RunResult {
         let mut context = self.clone();
         for ast in code {
-            context = context.run_single(runtime, ast);
+            context = context.run_single(runtime, ast)?;
         }
-        context
+        Ok(context)
     }
 
-    fn run_single(self, runtime: &mut Runtime, ast: Ast) -> Self {
+    fn run_single(self, runtime: &mut Runtime, ast: Ast) -> RunResult {
         runtime.log(&format!(
             "Running {} on {}. Funs: {}",
             format_code(&vec![ast.clone()]).yellow(),
             self.dot.to_string().green(),
             self.funs.to_fancy_string(),
         ));
-        match ast {
+        Ok(match ast {
             Ast::Number(number) => self.next(runtime, Expr::Number(number)),
             Ast::String(string) => self.next(runtime, Expr::String(string)),
             Ast::Symbol(symbol) => self.next(runtime, Expr::Symbol(symbol)),
@@ -31,8 +42,8 @@ impl Context {
                 runtime.depth_increase();
                 for (key, value) in map {
                     expr_map.insert(
-                        context.clone().run(runtime, key).dot,
-                        context.clone().run(runtime, value).dot,
+                        context.clone().run(runtime, key)?.dot,
+                        context.clone().run(runtime, value)?.dot,
                     );
                 }
                 runtime.depth_decrease();
@@ -43,7 +54,7 @@ impl Context {
                 let context = self.clone();
                 runtime.depth_increase();
                 for item in list {
-                    expr_list.push(context.clone().run(runtime, item).dot);
+                    expr_list.push(context.clone().run(runtime, item)?.dot);
                 }
                 runtime.depth_decrease();
                 self.next(runtime, Expr::List(expr_list))
@@ -57,19 +68,16 @@ impl Context {
             ),
             Ast::Name(name) => {
                 if name == "." {
-                    return self.clone();
+                    return Ok(self.clone());
                 }
-                let fun = self
-                    .funs
-                    .get(&name)
-                    .expect(&format!("Unknown name {}.", &name));
+                let fun = self.funs.get(&name).ok_or(unknown_function(name.clone()))?;
                 runtime.depth_increase();
                 let context = match fun.body.clone() {
-                    FunBody::Primitive => self.clone().primitive(runtime),
+                    FunBody::Primitive => self.clone().primitive(runtime)?,
                     FunBody::Code { scope, body } => (*scope)
                         .clone()
                         .next(runtime, self.dot.clone())
-                        .run(runtime, body.to_vec()),
+                        .run(runtime, body.to_vec())?,
                     FunBody::Value(expr) => self.clone().next(runtime, (*expr).clone()),
                 };
                 runtime.depth_decrease();
@@ -91,47 +99,35 @@ impl Context {
                 ));
                 next_context
             }
-        }
+        })
     }
 
-    fn primitive(self, runtime: &mut Runtime) -> Self {
-        let dot_for_panic_messages = self.dot.clone();
-        let args = match self.dot.clone() {
-            Expr::List(args) => args,
-            _ => panic!("✨ needs a list, got this: {}", dot_for_panic_messages),
-        };
+    fn primitive(self, runtime: &mut Runtime) -> RunResult {
+        let args = self
+            .dot
+            .clone()
+            .as_list()
+            .ok_or(wrong_usage("✨ needs a list.".into()))?;
         if args.len() != 2 {
-            panic!(
-                "✨ needs a list with two items, got this: {}",
-                dot_for_panic_messages
-            );
+            return Err(wrong_usage("✨ needs a list with two items.".into()));
         }
-        let name = match &args[0] {
-            Expr::Symbol(name) => name,
-            _ => panic!(
-                "✨ needs a symbol as the first tuple item, got this: {}",
-                dot_for_panic_messages
-            ),
-        };
+        let name = args[0].clone().as_symbol().ok_or(wrong_usage(
+            "✨ needs a symbol as the first tuple item".into(),
+        ))?;
         let arg = args[1].clone();
         let context = self.clone().next(runtime, arg.clone());
         match name.as_ref() {
-            "export-all" => context.primitive_export_all(),
-            "fun" => match context.primitive_fun(runtime) {
-                Ok(context) => context,
-                Err(err) => panic!("{}\nDot: {}", err, arg),
-            },
-            "let" => match context.primitive_let(runtime) {
-                Ok(context) => context,
-                Err(err) => panic!("{}\nDot: {}", err, arg),
-            },
+            "export-all" => Ok(context.primitive_export_all()),
+            "fun" => context.primitive_fun(runtime),
+            "let" => context.primitive_let(runtime),
             "get-item" => context.primitive_get_item(),
             "get-key" => context.primitive_get_key(),
             "loop" => context.primitive_loop(runtime),
-            "print" => context.primitive_print(runtime),
+            "panic" => context.primitive_panic(),
+            "print" => Ok(context.primitive_print(runtime)),
             "use" => context.primitive_use(runtime),
             "wait" => context.primitive_wait(runtime),
-            _ => panic!("Unknown primitive {}.", name),
+            _ => Err(wrong_usage(format!("Unknown primitive {}.", name))),
         }
     }
     fn primitive_export_all(mut self) -> Self {
@@ -146,34 +142,35 @@ impl Context {
         self.dot = Expr::unit();
         self
     }
-    fn primitive_fun(mut self, runtime: &mut Runtime) -> Result<Self, String> {
+    fn primitive_fun(mut self, runtime: &mut Runtime) -> RunResult {
         let args = self
             .dot
             .clone()
             .as_map()
-            .ok_or(format!("fun expects a map, got: {}", self.dot))?;
+            .ok_or(wrong_usage("fun needs a map.".into()))?;
         let name = args
             .get_symbol("name")
-            .ok_or("fun needs a :name.".to_string())?
+            .ok_or(wrong_usage("fun needs a :name.".into()))?
             .clone()
             .as_symbol()
-            .ok_or("The fun :name needs to be a symbol.".to_string())?;
+            .ok_or(wrong_usage("fun :name needs to be a symbol.".into()))?;
         let export_level = args
             .get_symbol("export-level")
             .unwrap_or(Expr::Number(0))
             .as_number()
-            .ok_or("The fun :export-level needs to be a number.".to_string())?
-            as u16
+            .ok_or(wrong_usage(
+                "fun :export-level needs to be a number.".into(),
+            ))? as u16
             + 1;
         let docs = args
             .get_symbol("docs")
             .and_then(|docs| docs.clone().as_string());
         let (scope, body) = args
             .get_symbol("body")
-            .ok_or("fun needs a :body.".to_string())?
+            .ok_or(wrong_usage("fun needs a :body.".into()))?
             .clone()
             .as_code()
-            .ok_or("The fun :body needs to be code.".to_string())?;
+            .ok_or(wrong_usage("fun :body needs to be code.".into()))?;
 
         let fun = Fun {
             name: name.clone(),
@@ -193,49 +190,55 @@ impl Context {
         ));
         Ok(self)
     }
-    fn primitive_get_item(mut self) -> Self {
-        let tuple = self.dot.as_list().expect("get-item needs a list.");
-        let list = tuple[0]
-            .clone()
+    fn primitive_get_item(mut self) -> RunResult {
+        let tuple = self
+            .dot
             .as_list()
-            .expect("get-item expected list as first argument.");
+            .ok_or(wrong_usage("get-item needs a list.".into()))?;
+        let list = tuple[0].clone().as_list().ok_or(wrong_usage(
+            "get-item needs a list as the first argument.".into(),
+        ))?;
         let index = tuple[1].clone().as_number().unwrap();
         self.dot = list[index as usize].clone();
-        self
+        Ok(self)
     }
-    fn primitive_get_key(mut self) -> Self {
-        let tuple = self.dot.as_list().expect("get-key needs list.");
-        let map = tuple[0]
-            .clone()
-            .as_map()
-            .expect("get-key expected map as first argument.");
+    fn primitive_get_key(mut self) -> RunResult {
+        let tuple = self
+            .dot
+            .as_list()
+            .ok_or(wrong_usage("get-key needs list.".into()))?;
+        let map = tuple[0].clone().as_map().ok_or(wrong_usage(
+            "get-key needs a map as the first argument.".into(),
+        ))?;
         let key = tuple[1].clone();
+        // TODO: Return Maybe.
         self.dot = map.get(&key).expect("key not found.").clone();
-        self
+        Ok(self)
     }
-    fn primitive_let(mut self, runtime: &mut Runtime) -> Result<Self, String> {
+    fn primitive_let(mut self, runtime: &mut Runtime) -> RunResult {
         let args = self
             .dot
             .clone()
             .as_map()
-            .ok_or(format!("let expects a map, got: {}", self.dot))?;
+            .ok_or(wrong_usage("let needs a map.".into()))?;
         let name = args
             .get_symbol("name")
-            .ok_or("let needs a :name.".to_string())?
+            .ok_or(wrong_usage("let needs a :name.".into()))?
             .clone();
         let export_level = args
             .get_symbol("export-level")
             .unwrap_or(Expr::Number(0))
             .as_number()
-            .ok_or("The let :export-level needs to be a number.".to_string())?
-            as u16
+            .ok_or(wrong_usage(
+                "let :export-level needs to be a number.".into(),
+            ))? as u16
             + 1;
         let docs = args
             .get_symbol("docs")
             .and_then(|docs| docs.clone().as_string());
         let value = args
             .get_symbol("value")
-            .ok_or("let needs a :value.".to_string())?;
+            .ok_or(wrong_usage("let needs a :value.".into()))?;
 
         let mut definitions = HashMap::new();
         Self::let_helper(&name, &value, &mut definitions);
@@ -258,6 +261,7 @@ impl Context {
         Ok(self)
     }
     fn let_helper(name: &Expr, value: &Expr, out: &mut HashMap<String, Expr>) {
+        // TODO: This still panics.
         match name {
             Expr::Symbol(name) => {
                 out.insert(name.clone(), value.clone());
@@ -280,45 +284,50 @@ impl Context {
             _ => panic!("Invalid match data on left side of let."),
         };
     }
-    fn primitive_loop(self, runtime: &mut Runtime) -> Self {
-        let (scope, body) = self.dot.as_code().expect("loop needs code.");
+    fn primitive_loop(self, runtime: &mut Runtime) -> RunResult {
+        let (scope, body) = self
+            .dot
+            .as_code()
+            .ok_or(wrong_usage("loop needs code.".into()))?;
         let context = scope.next(runtime, Expr::unit());
         loop {
-            context.clone().run(runtime, body.clone());
+            context.clone().run(runtime, body.clone())?;
         }
+    }
+    fn primitive_panic(self) -> RunResult {
+        Err(self.dot)
     }
     fn primitive_print(self, runtime: &mut Runtime) -> Self {
         runtime.print(&self.dot);
         self.next(runtime, Expr::unit())
     }
-    fn primitive_use(mut self, runtime: &mut Runtime) -> Self {
-        let (scope, body) = self.dot.clone().as_code().expect("use needs code");
+    fn primitive_use(mut self, runtime: &mut Runtime) -> RunResult {
+        let (scope, body) = self
+            .dot
+            .clone()
+            .as_code()
+            .ok_or(wrong_usage("use needs code".into()))?;
         let context = scope.next(runtime, Expr::unit());
-        let result = context.run(runtime, body);
+        let result = context.run(runtime, body)?;
         for (name, fun) in result.funs {
             self.funs.insert(name, fun);
         }
-        self
+        Ok(self)
     }
-    fn primitive_wait(self, runtime: &mut Runtime) -> Self {
-        let seconds = self.dot.clone().as_number().expect("wait needs a number,");
+    fn primitive_wait(self, runtime: &mut Runtime) -> RunResult {
+        let seconds = self
+            .dot
+            .clone()
+            .as_number()
+            .ok_or(wrong_usage("wait needs a number.".into()))?;
+        if seconds < 0 {
+            return Err(wrong_usage(
+                "can't wait a negative number of seconds.".into(),
+            ));
+        }
         runtime.wait(seconds as u64);
-        self
+        Ok(self)
     }
-    // fn primitive_type(&self) -> Self {
-    //     let value = match self.dot {
-    //         Ast::Number(_) => "number",
-    //         Ast::String(_) => "string",
-    //         Ast::Symbol(_) => "symbol",
-    //         Ast::List(_) => "list",
-    //         Ast::Map(_) => "map",
-    //         Ast::Code(_) => "code",
-    //         Ast::Name(_) => {
-    //             panic!("Called primitive type on Name, but it should be executed to an expression.")
-    //         }
-    //     };
-    //     self.with_dot(Ast::Symbol(value.into()))
-    // }
 }
 
 trait ExprMap {

@@ -3,6 +3,7 @@ mod runner;
 
 use ast::*;
 use clap::{App, SubCommand};
+use colored::Colorize;
 use lspower::jsonrpc::Result;
 use lspower::lsp::*;
 use lspower::{Client, LanguageServer, LspService, Server};
@@ -47,10 +48,24 @@ async fn main() {
 
         println!("Code: {}", format_code(&user));
         let mut fiber = runner::Runtime::default();
-        let expression = runner::Context::root(&mut fiber)
-            .run(&mut fiber, core)
-            .run(&mut fiber, user)
-            .dot;
+        let context = runner::Context::root(&mut fiber);
+        let context = match context.run(&mut fiber, core) {
+            Ok(context) => context,
+            Err(err) => panic!("The core library panicked: {}", err),
+        };
+        let context = match context.run(&mut fiber, user) {
+            Ok(context) => context,
+            Err(err) => {
+                println!(
+                    "{}{}",
+                    "The program panicked: ".to_string().red(),
+                    err.to_string().bright_red()
+                );
+                return;
+            }
+        };
+
+        let expression = context.dot;
         println!("Expression: {}", expression);
     }
 

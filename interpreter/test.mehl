@@ -8,15 +8,13 @@ a print
 
 foo
 
-###
-
-#1000 wait
-
-[ "Hello, world!" print 5 wait ] loop
+[
+  "Hello, world!" print
+  ...
+  5 wait
+] loop
 
 # TODO
-# * panic
-# * ...
 # * match
 # * bools
 # * logic
