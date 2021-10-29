@@ -15,13 +15,12 @@ foo
 ) match
 
 ((:true, :false) or, :false) and not print
-...
 
-[
-  "Hello, world!" print
-  ...
-  5 wait
-] loop
+[ "Hello, repeating world!" print ] (., 3) repeat
+
+1 wait
+
+...
 
 # Adding numbers
 

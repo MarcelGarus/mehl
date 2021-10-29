@@ -130,6 +130,8 @@ impl Context {
             "match" => context.primitive_match(runtime),
             "panic" => context.primitive_panic(),
             "print" => Ok(context.primitive_print(runtime)),
+            "repeat" => context.primitive_repeat(runtime),
+            "run" => context.primitive_run(runtime),
             "use" => context.primitive_use(runtime),
             "wait" => context.primitive_wait(runtime),
             _ => Err(wrong_usage(format!("Unknown primitive {}.", name))),
@@ -420,7 +422,40 @@ impl Context {
 
     fn primitive_print(self, runtime: &mut Runtime) -> Self {
         runtime.print(&self.dot);
-        self.next(runtime, Expr::unit())
+        self
+    }
+
+    fn primitive_repeat(self, runtime: &mut Runtime) -> RunResult {
+        let list = self
+            .dot
+            .as_list()
+            .ok_or(wrong_usage("repeat needs code and a number.".into()))?;
+        if list.len() != 2 {
+            return Err(wrong_usage(
+                "repeat needs two arguments – code and a number.".into(),
+            ));
+        }
+        let (scope, body) = list[0]
+            .clone()
+            .as_code()
+            .ok_or(wrong_usage("run needs code.".into()))?;
+        let n = list[1].clone().as_number().ok_or(wrong_usage(
+            "run needs a number of how many times to repeat.".into(),
+        ))?;
+        let context = scope.next(runtime, Expr::unit());
+        for _ in 0..n {
+            context.clone().run(runtime, body.clone())?;
+        }
+        Ok(context)
+    }
+
+    fn primitive_run(self, runtime: &mut Runtime) -> RunResult {
+        let (scope, body) = self
+            .dot
+            .as_code()
+            .ok_or(wrong_usage("run needs code.".into()))?;
+        let context = scope.next(runtime, Expr::unit());
+        context.clone().run(runtime, body.clone())
     }
 
     fn primitive_use(mut self, runtime: &mut Runtime) -> RunResult {

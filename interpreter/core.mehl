@@ -63,12 +63,15 @@
   (:export-all, :) ✨ # Increases the export level of all functions in this scope.
 ]) fun
 
-### Control flow
+### Matching
 
 (:match, "Matches over conditions.", [(:match, .) ✨]) fun
-(:wait, "Waits an amount of seconds.", [(:wait, .) ✨]) fun
-(:loop, "Executes code again and again.", [(:loop, .) ✨]) fun
-# (:run, "Executes code.", [(:run, .) ✨]) fun
+
+### Code
+
+(:run, "Runs code.", [(:run, .) ✨]) fun
+(:repeat, "Runs code a given number of times.", [(:repeat, .) ✨]) fun
+(:loop, "Runs code again and again.", [(:loop, .) ✨]) fun
 
 ### Panicking
 
@@ -80,6 +83,10 @@
 ### Input and Output
 
 (:print, "Prints to stdout.", [(:print, .) ✨]) fun
+
+### Time
+
+(:wait, "Waits an amount of seconds.", [(:wait, .) ✨]) fun
 
 ### Bools
 
@@ -118,7 +125,6 @@
 ###
 
 # TODO
-# * code
 # * maps
 # * lists
 # * strings

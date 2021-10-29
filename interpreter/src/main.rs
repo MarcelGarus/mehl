@@ -57,16 +57,22 @@ async fn main() {
             Ok(context) => context,
             Err(err) => {
                 println!(
-                    "{}{}",
-                    "The program panicked: ".to_string().red(),
-                    err.to_string().bright_red()
+                    "{}\n{}{}",
+                    "The program panicked.".red(),
+                    "Message: ".red(),
+                    err.to_string().bright_red().bold()
                 );
                 return;
             }
         };
 
-        let expression = context.dot;
-        println!("Expression: {}", expression);
+        let output = context.dot;
+        println!(
+            "{}\n{}{}",
+            "The program successfully finished.".green(),
+            "Output: ".green(),
+            output.to_string().bright_green().bold(),
+        );
     }
 
     if let Some(_) = matches.subcommand_matches("lsp") {
