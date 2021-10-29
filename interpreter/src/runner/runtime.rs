@@ -72,42 +72,6 @@ impl Expr {
     pub fn unit() -> Self {
         Self::Symbol("".into())
     }
-    pub fn as_number(self) -> Option<i64> {
-        match self {
-            Expr::Number(number) => Some(number),
-            _ => None,
-        }
-    }
-    pub fn as_string(self) -> Option<String> {
-        match self {
-            Expr::String(string) => Some(string),
-            _ => None,
-        }
-    }
-    pub fn as_symbol(self) -> Option<String> {
-        match self {
-            Expr::Symbol(symbol) => Some(symbol),
-            _ => None,
-        }
-    }
-    pub fn as_map(self) -> Option<HashMap<Expr, Expr>> {
-        match self {
-            Expr::Map(map) => Some(map),
-            _ => None,
-        }
-    }
-    pub fn as_list(self) -> Option<Vec<Expr>> {
-        match self {
-            Expr::List(list) => Some(list),
-            _ => None,
-        }
-    }
-    pub fn as_code(self) -> Option<(Box<Context>, Asts)> {
-        match self {
-            Expr::Code { scope, asts } => Some((scope, asts)),
-            _ => None,
-        }
-    }
 }
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

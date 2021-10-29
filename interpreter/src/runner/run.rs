@@ -6,17 +6,6 @@ use std::rc::Rc;
 use super::{runtime::*, utils::*};
 use crate::ast::*;
 
-type RunResult = Result<Context, Expr>;
-fn error(kind: String, msg: String) -> Expr {
-    Expr::List(vec![Expr::Symbol(kind), Expr::String(msg)])
-}
-fn wrong_usage(msg: String) -> Expr {
-    error("wrong-usage".into(), msg)
-}
-fn unknown_function(msg: String) -> Expr {
-    error("unknown-fun".into(), msg)
-}
-
 impl Context {
     pub fn run(self, runtime: &mut Runtime, code: Asts) -> RunResult {
         let mut context = self.clone();
@@ -107,20 +96,18 @@ impl Context {
 // Primitives.
 impl Context {
     fn primitive(self, runtime: &mut Runtime) -> RunResult {
-        let args = self
+        let (name, arg) = self
             .dot
             .clone()
-            .as_list()
-            .ok_or(wrong_usage("✨ needs a list.".into()))?;
-        if args.len() != 2 {
-            return Err(wrong_usage("✨ needs a list with two items.".into()));
-        }
-        let name = args[0].clone().as_symbol().ok_or(wrong_usage(
-            "✨ needs a symbol as the first tuple item".into(),
-        ))?;
-        let arg = args[1].clone();
+            .needs_list("✨ needs a list.")?
+            .needs_two_items("✨ needs a list with two items.")?;
+        let name = name.needs_symbol("✨ needs a symbol as the first tuple item")?;
         let context = self.clone().next(runtime, arg.clone());
         match name.as_ref() {
+            "+" => context.primitive_numbers_add(),
+            "-" => context.primitive_numbers_subtract(),
+            "*" => context.primitive_numbers_multiply(),
+            "/" => context.primitive_numbers_divide(),
             "export-all" => Ok(context.primitive_export_all()),
             "fun" => context.primitive_fun(runtime),
             "let" => context.primitive_let(runtime),
@@ -128,6 +115,7 @@ impl Context {
             "get-key" => context.primitive_get_key(),
             "loop" => context.primitive_loop(runtime),
             "match" => context.primitive_match(runtime),
+            "mod" => context.primitive_numbers_modulo(),
             "panic" => context.primitive_panic(),
             "print" => Ok(context.primitive_print(runtime)),
             "repeat" => context.primitive_repeat(runtime),
@@ -152,34 +140,24 @@ impl Context {
     }
 
     fn primitive_fun(mut self, runtime: &mut Runtime) -> RunResult {
-        let args = self
-            .dot
-            .clone()
-            .as_map()
-            .ok_or(wrong_usage("fun needs a map.".into()))?;
+        let args = self.dot.clone().needs_map("fun needs a map.")?;
         let name = args
             .get_symbol("name")
-            .ok_or(wrong_usage("fun needs a :name.".into()))?
-            .clone()
-            .as_symbol()
-            .ok_or(wrong_usage("fun :name needs to be a symbol.".into()))?;
-        let export_level = args
-            .get_symbol("export-level")
-            .unwrap_or(Expr::Number(0))
-            .as_number()
-            .ok_or(wrong_usage(
-                "fun :export-level needs to be a number.".into(),
-            ))? as u16
-            + 1;
+            .needed("fun needs a :name.")?
+            .needs_symbol("fun :name needs to be a symbol.")?;
+        let export_level =
+            args.get_symbol("export-level")
+                .unwrap_or(Expr::Number(0))
+                .needs_number("fun :export-level needs to be a number.")? as u16
+                + 1;
         let docs = args
             .get_symbol("docs")
             .and_then(|docs| docs.clone().as_string());
         let (scope, body) = args
             .get_symbol("body")
-            .ok_or(wrong_usage("fun needs a :body.".into()))?
+            .needed("fun needs a :body.")?
             .clone()
-            .as_code()
-            .ok_or(wrong_usage("fun :body needs to be code.".into()))?;
+            .needs_code("fun :body needs to be code.")?;
 
         let fun = Fun {
             name: name.clone(),
@@ -201,56 +179,42 @@ impl Context {
     }
 
     fn primitive_get_item(mut self) -> RunResult {
-        let tuple = self
+        let (list, index) = self
             .dot
-            .as_list()
-            .ok_or(wrong_usage("get-item needs a list.".into()))?;
-        let list = tuple[0].clone().as_list().ok_or(wrong_usage(
-            "get-item needs a list as the first argument.".into(),
-        ))?;
-        let index = tuple[1].clone().as_number().unwrap();
+            .needs_list("get-item needs a list.")?
+            .needs_two_items("get-item needs a list with two items.")?;
+        let list = list.needs_list("get-item needs a list as the first argument.")?;
+        let index = index.as_number().unwrap();
         self.dot = list[index as usize].clone();
         Ok(self)
     }
 
     fn primitive_get_key(mut self) -> RunResult {
-        let tuple = self
+        let (map, key) = self
             .dot
-            .as_list()
-            .ok_or(wrong_usage("get-key needs list.".into()))?;
-        let map = tuple[0].clone().as_map().ok_or(wrong_usage(
-            "get-key needs a map as the first argument.".into(),
-        ))?;
-        let key = tuple[1].clone();
+            .needs_list("get-key needs list.")?
+            .needs_two_items("get-key needs a list with two items.")?;
+        let map = map.needs_map("get-key needs a map as the first argument.")?;
         // TODO: Return Maybe.
         self.dot = map.get(&key).expect("key not found.").clone();
         Ok(self)
     }
 
     fn primitive_let(mut self, runtime: &mut Runtime) -> RunResult {
-        let args = self
-            .dot
-            .clone()
-            .as_map()
-            .ok_or(wrong_usage("let needs a map.".into()))?;
+        let args = self.dot.clone().needs_map("let needs a map.")?;
         let name = args
             .get_symbol("name")
-            .ok_or(wrong_usage("let needs a :name.".into()))?
+            .needed("let needs a :name.")?
             .clone();
-        let export_level = args
-            .get_symbol("export-level")
-            .unwrap_or(Expr::Number(0))
-            .as_number()
-            .ok_or(wrong_usage(
-                "let :export-level needs to be a number.".into(),
-            ))? as u16
-            + 1;
+        let export_level =
+            args.get_symbol("export-level")
+                .unwrap_or(Expr::Number(0))
+                .needs_number("let :export-level needs to be a number.")? as u16
+                + 1;
         let docs = args
             .get_symbol("docs")
             .and_then(|docs| docs.clone().as_string());
-        let value = args
-            .get_symbol("value")
-            .ok_or(wrong_usage("let needs a :value.".into()))?;
+        let value = args.get_symbol("value").needed("let needs a :value.")?;
 
         let mut definitions = HashMap::new();
         Self::let_helper(&name, &value, &mut definitions);
@@ -298,10 +262,7 @@ impl Context {
     }
 
     fn primitive_loop(self, runtime: &mut Runtime) -> RunResult {
-        let (scope, body) = self
-            .dot
-            .as_code()
-            .ok_or(wrong_usage("loop needs code.".into()))?;
+        let (scope, body) = self.dot.needs_code("loop needs code.")?;
         let context = scope.next(runtime, Expr::unit());
         loop {
             context.clone().run(runtime, body.clone())?;
@@ -309,26 +270,22 @@ impl Context {
     }
 
     fn primitive_match(self, runtime: &mut Runtime) -> RunResult {
-        let list = self
-            .dot
-            .as_list()
-            .ok_or(wrong_usage("match needs a list.".into()))?;
+        let list = self.dot.needs_list("match needs a list.")?;
         {
             // Usage checks.
             if list.len() < 3 {
                 return Err(wrong_usage(
                         "match needs a list with at least 3 items – the value, a pattern, and some code."
-                            .into(),
                     ));
             }
             if list.len() % 2 == 0 {
-                return Err(wrong_usage("match needs a list with an odd number of items – the value, and then pairs of patterns and code.".into()));
+                return Err(wrong_usage("match needs a list with an odd number of items – the value, and then in turn patterns and code."));
             }
             let mut i = 2;
             while i < list.len() {
-                list[i].clone().as_code().ok_or(wrong_usage(
-                    "match needs a value, and then in turn conditions and code.".into(),
-                ))?;
+                list[i]
+                    .clone()
+                    .needs_code("match needs a value, and then in turn patterns and code.")?;
                 i += 2;
             }
         }
@@ -355,7 +312,7 @@ impl Context {
             }
             return context.run(runtime, body.clone());
         }
-        Err(wrong_usage("no condition matched".into()))
+        Err(wrong_usage("no condition matched"))
     }
     fn match_helper(left: &Expr, right: &Expr) -> Option<HashMap<String, Expr>> {
         fn literal_match<T: Eq>(left: &T, right: &T) -> Option<HashMap<String, Expr>> {
@@ -416,6 +373,46 @@ impl Context {
         }
     }
 
+    fn primitive_numbers_add(mut self) -> RunResult {
+        let sum = self
+            .dot
+            .needs_list_of_numbers("+ needs a list of numbers.")?
+            .into_iter()
+            .fold(0, |a, b| a + b);
+        self.dot = Expr::Number(sum);
+        Ok(self)
+    }
+    fn primitive_numbers_subtract(mut self) -> RunResult {
+        let (first, second) = self
+            .dot
+            .needs_pair_of_numbers("- needs a list of two numbers.")?;
+        self.dot = Expr::Number(first - second);
+        Ok(self)
+    }
+    fn primitive_numbers_multiply(mut self) -> RunResult {
+        let product = self
+            .dot
+            .needs_list_of_numbers("* needs a list of numbers.")?
+            .into_iter()
+            .fold(1, |a, b| a * b);
+        self.dot = Expr::Number(product);
+        Ok(self)
+    }
+    fn primitive_numbers_divide(mut self) -> RunResult {
+        let (first, second) = self
+            .dot
+            .needs_pair_of_numbers("/ needs a list of two numbers.")?;
+        self.dot = Expr::Number(first / second);
+        Ok(self)
+    }
+    fn primitive_numbers_modulo(mut self) -> RunResult {
+        let (first, second) = self
+            .dot
+            .needs_pair_of_numbers("mod needs a list of two numbers.")?;
+        self.dot = Expr::Number(first % second);
+        Ok(self)
+    }
+
     fn primitive_panic(self) -> RunResult {
         Err(self.dot)
     }
@@ -426,22 +423,12 @@ impl Context {
     }
 
     fn primitive_repeat(self, runtime: &mut Runtime) -> RunResult {
-        let list = self
+        let (code, n) = self
             .dot
-            .as_list()
-            .ok_or(wrong_usage("repeat needs code and a number.".into()))?;
-        if list.len() != 2 {
-            return Err(wrong_usage(
-                "repeat needs two arguments – code and a number.".into(),
-            ));
-        }
-        let (scope, body) = list[0]
-            .clone()
-            .as_code()
-            .ok_or(wrong_usage("run needs code.".into()))?;
-        let n = list[1].clone().as_number().ok_or(wrong_usage(
-            "run needs a number of how many times to repeat.".into(),
-        ))?;
+            .needs_list("repeat needs a list with code and a number.")?
+            .needs_two_items("repeat needs two arguments – code and a number.")?;
+        let (scope, body) = code.needs_code("run needs code.")?;
+        let n = n.needs_number("run needs a number of how many times to repeat.")?;
         let context = scope.next(runtime, Expr::unit());
         for _ in 0..n {
             context.clone().run(runtime, body.clone())?;
@@ -450,20 +437,13 @@ impl Context {
     }
 
     fn primitive_run(self, runtime: &mut Runtime) -> RunResult {
-        let (scope, body) = self
-            .dot
-            .as_code()
-            .ok_or(wrong_usage("run needs code.".into()))?;
+        let (scope, body) = self.dot.needs_code("run needs code.")?;
         let context = scope.next(runtime, Expr::unit());
         context.clone().run(runtime, body.clone())
     }
 
     fn primitive_use(mut self, runtime: &mut Runtime) -> RunResult {
-        let (scope, body) = self
-            .dot
-            .clone()
-            .as_code()
-            .ok_or(wrong_usage("use needs code".into()))?;
+        let (scope, body) = self.dot.clone().needs_code("use needs code")?;
         let context = scope.next(runtime, Expr::unit());
         let result = context.run(runtime, body)?;
         for (name, fun) in result.funs {
@@ -473,15 +453,9 @@ impl Context {
     }
 
     fn primitive_wait(self, runtime: &mut Runtime) -> RunResult {
-        let seconds = self
-            .dot
-            .clone()
-            .as_number()
-            .ok_or(wrong_usage("wait needs a number.".into()))?;
+        let seconds = self.dot.clone().needs_number("wait needs a number.")?;
         if seconds < 0 {
-            return Err(wrong_usage(
-                "can't wait a negative number of seconds.".into(),
-            ));
+            return Err(wrong_usage("can't wait a negative number of seconds."));
         }
         runtime.wait(seconds as u64);
         Ok(self)

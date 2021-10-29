@@ -80,6 +80,14 @@
   (:todo, "Todo: This part of the program is not yet implemented.") panic
 ]) fun
 
+### Numbers
+
+(:+, "Adds a list of numbers.", [(:+, .) ✨]) fun
+(:-, "Subtracts one number from another.", [(:-, .) ✨]) fun
+(:*, "Multiplies a list of numbers.", [(:*, .) ✨]) fun
+(:/, "Divides one number by another.", [(:/, .) ✨]) fun
+(:mod, "Takes one number modulo another one.", [(:mod, .) ✨]) fun
+
 ### Input and Output
 
 (:print, "Prints to stdout.", [(:print, .) ✨]) fun
@@ -122,14 +130,12 @@
   ) match
 ]) fun
 
-###
+### Todo
 
-# TODO
 # * maps
 # * lists
 # * strings
 # * maybe
-# * math
 # * output
 # * input
 # * iterate
@@ -142,6 +148,8 @@
 # * propagate-wrong-usage
 # * channels
 # * ambients
+
+##########
 
 # (:get-item, "Returns the nth item from a list. Usage: (my-list, 0) get-item", [ (:get-item) ✨ ]) fun
 
