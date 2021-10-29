@@ -6,15 +6,64 @@
 # features that would be impossible or impractical to implement directly in Mehl
 # itself. Calls to these magic primitives have the following form:
 # `(primitive-name, args) ✨`
+# The primitive entry point `✨` is automatically made available before any
+# code runs. Note that you can loose access to `✨`, for example by redefining
+# it to be something else.
 
-{ :name, :fun, :docs, "Defines a new function.", :body, [ (:fun-and-export, .) ✨ ] } (:fun, .) ✨
-{ :name, :print, :docs, "Prints to stdout.", :body, [(:print, .) ✨] } fun
-{ :name, :wait, :docs, "Waits an amount of seconds.", :body, [(:wait, .) ✨] } fun
-{ :name, :run, :docs, "Executes code.", :body, [(:run, .) ✨] } fun
-{ :name, :loop, :docs, "Executes code again and again.", :body, [(:loop, .) ✨] } fun
-{ :name, :use, :docs, "Imports functions from a scope.", :body, [(:run-and-import, .) ✨] } fun
+# To define variables or functions, you can call `let` and `fun`, which are
+# themselves functions.
+# How can this possibly work? Each function has an *export level*, which defines
+# how often it should be exported from the current function call. The default
+# export level is 0, but the `:fun` primitive accepts an arbitrary export level.
+# That means it's possible to define functions that define functions in the
+# surrounding scope when they're used!
 
-#####
+{ :name, :let, :docs, "Defines a new value. Usage: (:a, 5) let", :body, [
+  (:let, { :name, (:name, :value), :value, . }) ✨
+  (:let, { :name, name, :value, value, :export-level, 1 }) ✨
+] } (:fun, .) ✨
+
+{ :name, :fun, :docs, "Defines a new function. Usage: (:foo, docs, [1]) fun", :body, [
+  ((:name, :docs, :body), .) let
+  (:fun, { :name, name, :docs, docs, :body, body, :export-level, 1 }) ✨
+] } (:fun, .) ✨
+
+# To define something publically, `pub-let` and `pub-fun` are useful. They have
+# an export level of 2, which means that if you use them to define something in
+# a scope and that scope gets imported somewhere else, the functions are also
+# imported:
+#
+# ```
+# [
+#   (:foo, "A foo.", ["Hello, world!" print]) pub-fun
+#   (:bar, 5) pub-let
+# ] use
+#
+# foo # Prints "Hello, world!"
+# ```
+
+(:pub-let, "Defines a new public value that is available if the current scope is imported somewhere else.", [
+  ((:name, :value), .) let
+  (:let, { :name, name, :value, value, :export-level, 2 }) ✨
+]) fun
+
+(:pub-fun, "Defines a new public function that is available if the current scope is imported somewhere else.", [
+  ((:name, :docs, :body), .) let
+  (:fun, { :name, name, :docs, docs, :body, body, :export-level, 2 }) ✨
+]) fun
+
+# Control flow.
+
+(:wait, "Waits an amount of seconds.", [(:wait, .) ✨]) fun
+(:loop, "Executes code again and again.", [(:loop, .) ✨]) fun
+(:run, "Executes code.", [(:run, .) ✨]) fun
+(:use, "Executes code and then imports functions that it exported.", [(:use, .) ✨]) fun
+
+###
+
+(:print, "Prints to stdout.", [(:print, .) ✨]) fun
+
+# (:get-item, "Returns the nth item from a list. Usage: (my-list, 0) get-item", [ (:get-item) ✨ ]) fun
 
 # There is no built-in concept of types. Instead, arbitrary code can determine
 # whether something is a valid input and output of a function.

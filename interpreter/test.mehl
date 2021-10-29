@@ -1,26 +1,24 @@
-# Variables
-
-"Hello, world!" print
+(:a, "Hello, world!") let
+a print
 
 [
   "Hi from library!" print
-  {:name, :foo, :body, [ "Hi from foo!" print ]} fun
-  (:export, {:foo, :}) ✨
-] (:run-and-import, .) ✨
+  (:foo, "No docs", [ "Hi from foo!" print ]) pub-fun
+] (:use, .) ✨
+
 foo
 
 ###
 
-1000 wait
+#1000 wait
 
 [ "Hello, world!" print 5 wait ] loop
 
 # TODO
 # * imports (use)
-# * loop
-# * let
 # * panic
 # * ...
+# * match
 # * bools
 # * logic
 # * math
@@ -40,7 +38,6 @@ foo
 
 #(1, 2) List[Int].+
 
-
 # Iterable with cycle, map, filter, take, do
 
 # { :name, :List.Iter, :in, Any, :out, Any, :body, [[]] } fun
@@ -54,19 +51,11 @@ foo
 #   (., 5) Iter.take
 #   [print] Iter.do
 
-
 # Adding numbers
 
 #(1, 2) +
 #(1, 2, 3, 4, 5) (:iter-over-list, .) magic-primitive # TODO
 
-
 # Types
 
 #"Hello, world!" type print
-#"Hello, world!" (., (3, .), .) print
-
-
-# Variables
-
-#(5, :foo) let

@@ -46,7 +46,7 @@ async fn main() {
         println!("Test parsed.");
 
         println!("Code: {}", format_code(&user));
-        let mut fiber = runner::Fiber::new();
+        let mut fiber = runner::Runtime::default();
         let expression = runner::Context::root(&mut fiber)
             .run(&mut fiber, core)
             .run(&mut fiber, user)
