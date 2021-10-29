@@ -1,6 +1,8 @@
-# Welcome to the Mehl core library!
-# This library is implicitly included at the start of every Mehl run. There are
-# comments throughout so that you can read it from top to bottom like a book.
+## The Mehl Core Library
+
+# Welcome! This library is implicitly included at the start of every Mehl run.
+# There are comments throughout so that you can read it from top to bottom like
+# a book.
 
 # In Mehl, `✨` is the entry point for the Mehl interpreter to offer various
 # features that would be impossible or impractical to implement directly in Mehl
@@ -10,8 +12,12 @@
 # code runs. Note that you can loose access to `✨`, for example by redefining
 # it to be something else.
 
-# To define variables or functions, you can call `let` and `fun`, which are
-# themselves functions.
+## Keywords to bind functions and code
+
+# In Mehl, there is no distinction between variables or functions – variables
+# are just functions which always return the same result. You can use `fun` to
+# define a function, or `let` if you already have a value. Both of these
+# keywords are themselves functions.
 # How can this possibly work? Each function has an *export level*, which defines
 # how often it should be exported from the current function call. The default
 # export level is 0, but the `:fun` primitive accepts an arbitrary export level.
@@ -52,31 +58,39 @@
   (:fun, { :name, name, :docs, docs, :body, body, :export-level, 2 }) ✨
 ]) fun
 
-# Control flow.
+(:use, "Executes code and then imports functions that it exported.", [
+  (:use, .) ✨ # Runs the code and makes functions available in this scope.
+  (:export-all, :) ✨ # Increases the export level of all functions in this scope.
+]) fun
 
+## Control flow
+
+(:match, "Matches over conditions.", [(:match, .) ✨]) fun
 (:wait, "Waits an amount of seconds.", [(:wait, .) ✨]) fun
 (:loop, "Executes code again and again.", [(:loop, .) ✨]) fun
-(:run, "Executes code.", [(:run, .) ✨]) fun
-(:use, "Executes code and then imports functions that it exported.", [
-  (:use, .) ✨
-  (:export-all, :) ✨
-]) fun
+# (:run, "Executes code.", [(:run, .) ✨]) fun
 (:panic, "Crashes the program.", [(:panic, .) ✨]) fun
 (:..., "Crashes the program because some part of it is not implemented yet.", [
   "Todo: A part of the program is not yet implemented." panic
 ]) fun
 
+## Input and Output
+
+(:print, "Prints to stdout.", [(:print, .) ✨]) fun
+
 ###
 
 # TODO
-# * match
 # * bools
 # * logic
+# * run
+# * maybe
 # * math
-# * units
+# * output
+# * input
 # * iterate
 # * random
-# * input
+# * units
 # * fibers
 # * http get
 # * FFI
@@ -84,8 +98,6 @@
 # * propagate-wrong-usage
 # * channels
 # * ambients
-
-(:print, "Prints to stdout.", [(:print, .) ✨]) fun
 
 # (:get-item, "Returns the nth item from a list. Usage: (my-list, 0) get-item", [ (:get-item) ✨ ]) fun
 

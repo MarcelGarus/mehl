@@ -1,9 +1,10 @@
-use crate::ast::*;
 use colored::*;
 use im::HashMap;
+use itertools::Itertools;
 use std::rc::Rc;
 
-use super::runtime::*;
+use super::{runtime::*, utils::*};
+use crate::ast::*;
 
 type RunResult = Result<Context, Expr>;
 fn error(kind: String, msg: String) -> Expr {
@@ -101,7 +102,10 @@ impl Context {
             }
         })
     }
+}
 
+// Primitives.
+impl Context {
     fn primitive(self, runtime: &mut Runtime) -> RunResult {
         let args = self
             .dot
@@ -123,6 +127,7 @@ impl Context {
             "get-item" => context.primitive_get_item(),
             "get-key" => context.primitive_get_key(),
             "loop" => context.primitive_loop(runtime),
+            "match" => context.primitive_match(runtime),
             "panic" => context.primitive_panic(),
             "print" => Ok(context.primitive_print(runtime)),
             "use" => context.primitive_use(runtime),
@@ -130,6 +135,7 @@ impl Context {
             _ => Err(wrong_usage(format!("Unknown primitive {}.", name))),
         }
     }
+
     fn primitive_export_all(mut self) -> Self {
         self.funs = self
             .funs
@@ -142,6 +148,7 @@ impl Context {
         self.dot = Expr::unit();
         self
     }
+
     fn primitive_fun(mut self, runtime: &mut Runtime) -> RunResult {
         let args = self
             .dot
@@ -190,6 +197,7 @@ impl Context {
         ));
         Ok(self)
     }
+
     fn primitive_get_item(mut self) -> RunResult {
         let tuple = self
             .dot
@@ -202,6 +210,7 @@ impl Context {
         self.dot = list[index as usize].clone();
         Ok(self)
     }
+
     fn primitive_get_key(mut self) -> RunResult {
         let tuple = self
             .dot
@@ -215,6 +224,7 @@ impl Context {
         self.dot = map.get(&key).expect("key not found.").clone();
         Ok(self)
     }
+
     fn primitive_let(mut self, runtime: &mut Runtime) -> RunResult {
         let args = self
             .dot
@@ -284,6 +294,7 @@ impl Context {
             _ => panic!("Invalid match data on left side of let."),
         };
     }
+
     fn primitive_loop(self, runtime: &mut Runtime) -> RunResult {
         let (scope, body) = self
             .dot
@@ -294,13 +305,122 @@ impl Context {
             context.clone().run(runtime, body.clone())?;
         }
     }
+
+    fn primitive_match(self, runtime: &mut Runtime) -> RunResult {
+        let list = self
+            .dot
+            .as_list()
+            .ok_or(wrong_usage("match needs a list.".into()))?;
+        {
+            // Usage checks.
+            if list.len() < 3 {
+                return Err(wrong_usage(
+                        "match needs a list with at least 3 items – the value, a pattern, and some code."
+                            .into(),
+                    ));
+            }
+            if list.len() % 2 == 0 {
+                return Err(wrong_usage("match needs a list with an odd number of items – the value, and then pairs of patterns and code.".into()));
+            }
+            let mut i = 2;
+            while i < list.len() {
+                list[i].clone().as_code().ok_or(wrong_usage(
+                    "match needs a value, and then in turn conditions and code.".into(),
+                ))?;
+                i += 2;
+            }
+        }
+
+        let value = list[0].clone();
+        for mut chunk in &list.into_iter().skip(1).chunks(2) {
+            let (condition, code) = (chunk.next().unwrap(), chunk.next().unwrap());
+            let bindings = match Self::match_helper(&condition, &value) {
+                Some(bindings) => bindings,
+                None => continue,
+            };
+            let (scope, body) = code.as_code().expect("checked above");
+            let mut context = scope.next(runtime, Expr::unit());
+            for (key, value) in bindings {
+                context.funs.insert(
+                    key.clone(),
+                    Fun {
+                        name: key,
+                        docs: None,
+                        body: FunBody::Value(Rc::new(value)),
+                        export_level: 0,
+                    },
+                );
+            }
+            return context.run(runtime, body.clone());
+        }
+        Err(wrong_usage("no condition matched".into()))
+    }
+    fn match_helper(left: &Expr, right: &Expr) -> Option<HashMap<String, Expr>> {
+        fn literal_match<T: Eq>(left: &T, right: &T) -> Option<HashMap<String, Expr>> {
+            if left == right {
+                Some(HashMap::new())
+            } else {
+                None
+            }
+        }
+        match left {
+            Expr::Number(_) => literal_match(left, right),
+            Expr::String(_) => literal_match(left, right),
+            Expr::Symbol(symbol) => {
+                if symbol.starts_with("?") {
+                    let mut map = HashMap::new();
+                    map.insert(symbol[1..].to_string(), right.clone());
+                    Some(map)
+                } else {
+                    literal_match(left, right)
+                }
+            }
+            Expr::Map(left_map) => {
+                let mut unified = HashMap::new();
+                let right_map = right.clone().as_map()?;
+                for (key, left_value) in left_map {
+                    let bindings = Self::match_helper(left_value, right_map.get(&key)?)?;
+                    for (name, value) in bindings {
+                        if let Some(expected_value) = unified.get(&name) {
+                            literal_match(&value, expected_value)?;
+                        } else {
+                            unified.insert(name, value);
+                        }
+                    }
+                }
+                Some(unified)
+            }
+            Expr::List(left_list) => {
+                let mut unified = HashMap::new();
+                let right_list = right.clone().as_list()?;
+                if left_list.len() != right_list.len() {
+                    return None;
+                }
+                for (left, right) in left_list.into_iter().zip(right_list.iter()) {
+                    let bindings = Self::match_helper(left, right)?;
+                    for (name, value) in bindings {
+                        if let Some(expected_value) = unified.get(&name) {
+                            literal_match(&value, expected_value)?;
+                        } else {
+                            unified.insert(name, value);
+                        }
+                    }
+                }
+                Some(unified)
+            }
+            Expr::Code { scope: _, asts: _ } => literal_match(left, right),
+        }
+    }
+
     fn primitive_panic(self) -> RunResult {
         Err(self.dot)
     }
+
     fn primitive_print(self, runtime: &mut Runtime) -> Self {
         runtime.print(&self.dot);
         self.next(runtime, Expr::unit())
     }
+
     fn primitive_use(mut self, runtime: &mut Runtime) -> RunResult {
         let (scope, body) = self
             .dot
@@ -314,6 +434,7 @@ impl Context {
         }
         Ok(self)
     }
+
     fn primitive_wait(self, runtime: &mut Runtime) -> RunResult {
         let seconds = self
             .dot
@@ -327,29 +448,5 @@ impl Context {
         }
         runtime.wait(seconds as u64);
         Ok(self)
-    }
-}
-
-trait ExprMap {
-    fn get_symbol(&self, symbol: &str) -> Option<Expr>;
-}
-impl ExprMap for HashMap<Expr, Expr> {
-    fn get_symbol(&self, symbol: &str) -> Option<Expr> {
-        self.get(&Expr::Symbol(symbol.into()))
-            .map(|expr| expr.clone())
-    }
-}
-
-trait FancyFunsExt {
-    fn to_fancy_string(&self) -> String;
-}
-impl FancyFunsExt for HashMap<String, Fun> {
-    fn to_fancy_string(&self) -> String {
-        itertools::join(
-            self.iter().map(|(name, fun)| {
-                format!("{}{}", name.blue(), fun.export_level.to_string().red())
-            }),
-            ", ",
-        )
     }
 }

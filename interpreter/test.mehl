@@ -8,6 +8,12 @@ a print
 
 foo
 
+({:foo, 4, :bar, 4},
+  :foo, [],
+  {:foo, :?a, :bar, :?a}, [("Bar", a) print],
+  {}, ["Blub" print]
+) match
+
 [
   "Hello, world!" print
   ...
