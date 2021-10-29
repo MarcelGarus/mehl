@@ -1,4 +1,4 @@
-## The Mehl Core Library
+### The Mehl Core Library
 
 # Welcome! This library is implicitly included at the start of every Mehl run.
 # There are comments throughout so that you can read it from top to bottom like
@@ -12,7 +12,7 @@
 # code runs. Note that you can loose access to `✨`, for example by redefining
 # it to be something else.
 
-## Keywords to bind functions and code
+### Keywords to bind functions and code
 
 # In Mehl, there is no distinction between variables or functions – variables
 # are just functions which always return the same result. You can use `fun` to
@@ -63,27 +63,65 @@
   (:export-all, :) ✨ # Increases the export level of all functions in this scope.
 ]) fun
 
-## Control flow
+### Control flow
 
 (:match, "Matches over conditions.", [(:match, .) ✨]) fun
 (:wait, "Waits an amount of seconds.", [(:wait, .) ✨]) fun
 (:loop, "Executes code again and again.", [(:loop, .) ✨]) fun
 # (:run, "Executes code.", [(:run, .) ✨]) fun
+
+### Panicking
+
 (:panic, "Crashes the program.", [(:panic, .) ✨]) fun
-(:..., "Crashes the program because some part of it is not implemented yet.", [
-  "Todo: A part of the program is not yet implemented." panic
+(:..., "Indicates that some part of the program is not implemented yet. Panics if evaluated.", [
+  (:todo, "Todo: This part of the program is not yet implemented.") panic
 ]) fun
 
-## Input and Output
+### Input and Output
 
 (:print, "Prints to stdout.", [(:print, .) ✨]) fun
+
+### Bools
+
+# Boolean values (or bools for short) encode truthfulness. A value is considered
+# a bool if it's either `:true` or `:false`.
+
+(:bool?, "Checks if a value is a bool.", [
+  (., :true, [:true], :false, [:true], :_, [:false]) match
+]) fun
+(:not, "Inverses the bool", [
+  (.,
+    :false, [:true],
+    :true, [:false],
+    :_, [(:wrong-usage, "not needs a bool") panic]
+  ) match
+]) fun
+(:and, "Checks if both bools are true", [
+  (.,
+    (:false, :false), [:false],
+    (:false, :true), [:false],
+    (:true, :false), [:false],
+    (:true, :true), [:true],
+    :_, [(:wrong-usage, "and needs a pair of bools") panic]
+  ) match
+]) fun
+(:or, "Checks if at least one bool is true", [
+  (.,
+    (:false, :false), [:false],
+    (:false, :true), [:true],
+    (:true, :false), [:true],
+    (:true, :true), [:true],
+    :_, [(:wrong-usage, "or needs a pair of bools") panic]
+  ) match
+]) fun
 
 ###
 
 # TODO
-# * bools
-# * logic
-# * run
+# * code
+# * maps
+# * lists
+# * strings
 # * maybe
 # * math
 # * output
