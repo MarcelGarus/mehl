@@ -57,7 +57,10 @@
 (:wait, "Waits an amount of seconds.", [(:wait, .) ✨]) fun
 (:loop, "Executes code again and again.", [(:loop, .) ✨]) fun
 (:run, "Executes code.", [(:run, .) ✨]) fun
-(:use, "Executes code and then imports functions that it exported.", [(:use, .) ✨]) fun
+(:use, "Executes code and then imports functions that it exported.", [
+  (:use, .) ✨
+  (:export-all, :) ✨
+]) fun
 
 ###
 

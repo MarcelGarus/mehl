@@ -4,7 +4,7 @@ a print
 [
   "Hi from library!" print
   (:foo, "No docs", [ "Hi from foo!" print ]) pub-fun
-] (:use, .) ✨
+] use
 
 foo
 
@@ -15,7 +15,6 @@ foo
 [ "Hello, world!" print 5 wait ] loop
 
 # TODO
-# * imports (use)
 # * panic
 # * ...
 # * match

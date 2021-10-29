@@ -116,6 +116,7 @@ impl Context {
         let arg = args[1].clone();
         let context = self.clone().next(runtime, arg.clone());
         match name.as_ref() {
+            "export-all" => context.primitive_export_all(),
             "fun" => match context.primitive_fun(runtime) {
                 Ok(context) => context,
                 Err(err) => panic!("{}\nDot: {}", err, arg),
@@ -132,6 +133,18 @@ impl Context {
             "wait" => context.primitive_wait(runtime),
             _ => panic!("Unknown primitive {}.", name),
         }
+    }
+    fn primitive_export_all(mut self) -> Self {
+        self.funs = self
+            .funs
+            .into_iter()
+            .map(|(name, mut fun)| {
+                fun.export_level += 2;
+                (name, fun)
+            })
+            .collect();
+        self.dot = Expr::unit();
+        self
     }
     fn primitive_fun(mut self, runtime: &mut Runtime) -> Result<Self, String> {
         let args = self
@@ -279,11 +292,7 @@ impl Context {
         self.next(runtime, Expr::unit())
     }
     fn primitive_use(mut self, runtime: &mut Runtime) -> Self {
-        let (scope, body) = self
-            .dot
-            .clone()
-            .as_code()
-            .expect("run-and-import needs code");
+        let (scope, body) = self.dot.clone().as_code().expect("use needs code");
         let context = scope.next(runtime, Expr::unit());
         let result = context.run(runtime, body);
         for (name, fun) in result.funs {
