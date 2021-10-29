@@ -367,7 +367,9 @@ impl Context {
             Expr::Number(_) => literal_match(left, right),
             Expr::String(_) => literal_match(left, right),
             Expr::Symbol(symbol) => {
-                if symbol.starts_with("?") {
+                if symbol == "_" {
+                    Some(HashMap::new())
+                } else if symbol.starts_with("?") {
                     let mut map = HashMap::new();
                     map.insert(symbol[1..].to_string(), right.clone());
                     Some(map)
