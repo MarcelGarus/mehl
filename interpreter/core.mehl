@@ -68,6 +68,23 @@
 
 ###
 
+# TODO
+# * match
+# * bools
+# * logic
+# * math
+# * units
+# * iterate
+# * random
+# * input
+# * fibers
+# * http get
+# * FFI
+# * wrong-usage
+# * propagate-wrong-usage
+# * channels
+# * ambients
+
 (:print, "Prints to stdout.", [(:print, .) ✨]) fun
 
 # (:get-item, "Returns the nth item from a list. Usage: (my-list, 0) get-item", [ (:get-item) ✨ ]) fun

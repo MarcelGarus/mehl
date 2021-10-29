@@ -14,23 +14,6 @@ foo
   5 wait
 ] loop
 
-# TODO
-# * match
-# * bools
-# * logic
-# * math
-# * units
-# * iterate
-# * random
-# * input
-# * fibers
-# * http get
-# * FFI
-# * wrong-usage
-# * propagate-wrong-usage
-# * channels
-# * ambients
-
 # Adding numbers
 
 #(1, 2) List[Int].+
