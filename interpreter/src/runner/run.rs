@@ -438,14 +438,12 @@ impl Context {
 
     fn primitive_run(self, runtime: &mut Runtime) -> RunResult {
         let (scope, body) = self.dot.needs_code("run needs code.")?;
-        let context = scope.next(runtime, Expr::unit());
-        context.clone().run(runtime, body.clone())
+        scope.next(runtime, Expr::unit()).run(runtime, body.clone())
     }
 
     fn primitive_use(mut self, runtime: &mut Runtime) -> RunResult {
         let (scope, body) = self.dot.clone().needs_code("use needs code")?;
-        let context = scope.next(runtime, Expr::unit());
-        let result = context.run(runtime, body)?;
+        let result = scope.next(runtime, Expr::unit()).run(runtime, body)?;
         for (name, fun) in result.funs {
             self.funs.insert(name, fun);
         }

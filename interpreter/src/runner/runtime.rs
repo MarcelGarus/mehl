@@ -45,6 +45,12 @@ pub enum Expr {
     Code { scope: Box<Context>, asts: Asts },
 }
 
+impl Expr {
+    pub fn unit() -> Self {
+        Self::Symbol("".into())
+    }
+}
+
 impl Hash for Expr {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
@@ -68,11 +74,6 @@ impl Hash for Expr {
     }
 }
 
-impl Expr {
-    pub fn unit() -> Self {
-        Self::Symbol("".into())
-    }
-}
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

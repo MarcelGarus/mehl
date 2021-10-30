@@ -132,6 +132,10 @@
 
 ### Todo
 
+# * =
+# * bignum
+# * pow
+# * use Rc
 # * maps
 # * lists
 # * strings
@@ -141,6 +145,7 @@
 # * iterate
 # * random
 # * units
+# * memory management
 # * fibers
 # * http get
 # * FFI
@@ -148,6 +153,7 @@
 # * propagate-wrong-usage
 # * channels
 # * ambients
+# * testing
 
 ##########
 
