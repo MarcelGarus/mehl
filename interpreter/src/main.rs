@@ -1,9 +1,11 @@
 mod ast;
+mod compiler;
 mod runner;
 
 use ast::*;
 use clap::{App, SubCommand};
 use colored::Colorize;
+use compiler::*;
 use lspower::jsonrpc::Result;
 use lspower::lsp::*;
 use lspower::{Client, LanguageServer, LspService, Server};
@@ -47,6 +49,12 @@ async fn main() {
         println!("Test parsed.");
 
         println!("Code: {}", format_code(&user));
+
+        let mut statements = compile(user);
+        println!("{}", statements);
+        println!("Optimized:");
+        statements.optimize();
+        println!("{}", statements);
 
         // let mut fiber = runner::Runtime::default();
         // let context = runner::Context::root(&mut fiber);
