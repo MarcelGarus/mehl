@@ -1,26 +1,26 @@
-(:a, "Hello, world!") let
+[(:print, .) ✨] -> print
+
+"Hello, world!" => a
 a print
 
-[
-  "Hi from library!" print
-  (:foo, "No docs", [ "Hi from foo!" print ]) pub-fun
-] use
-
+["Hi from foo!" print] -> foo
 foo
 
-({:foo, 4, :bar, 4},
-  :foo, [],
-  {:foo, :?a, :bar, :?a}, [("Bar", a) print],
-  {}, ["Blub" print]
-) match
+# ...
 
-((:true, :false) or, :false) and not print
+# ({:foo, 4, :bar, 4},
+#   :foo, [],
+#   {:foo, :?a, :bar, :?a}, [("Bar", a) print],
+#   {}, ["Blub" print]
+# ) match
 
-[ "Hello, repeating world!" print ] (., 3) repeat
+# ((:true, :false) or, :false) and not print
 
-(1, 2) + wait
+# [ "Hello, repeating world!" print ] (., 3) repeat
 
-...
+# (1, 2) + wait
+
+# ...
 
 # Adding numbers
 
