@@ -47,32 +47,33 @@ async fn main() {
         println!("Test parsed.");
 
         println!("Code: {}", format_code(&user));
-        let mut fiber = runner::Runtime::default();
-        let context = runner::Context::root(&mut fiber);
-        let context = match context.run(&mut fiber, core) {
-            Ok(context) => context,
-            Err(err) => panic!("The core library panicked: {}", err),
-        };
-        let context = match context.run(&mut fiber, user) {
-            Ok(context) => context,
-            Err(err) => {
-                println!(
-                    "{}\n{}{}",
-                    "The program panicked.".red(),
-                    "Message: ".red(),
-                    err.to_string().bright_red().bold()
-                );
-                return;
-            }
-        };
 
-        let output = context.dot;
-        println!(
-            "{}\n{}{}",
-            "The program successfully finished.".green(),
-            "Output: ".green(),
-            output.to_string().bright_green().bold(),
-        );
+        // let mut fiber = runner::Runtime::default();
+        // let context = runner::Context::root(&mut fiber);
+        // let context = match context.run(&mut fiber, core) {
+        //     Ok(context) => context,
+        //     Err(err) => panic!("The core library panicked: {}", err),
+        // };
+        // let context = match context.run(&mut fiber, user) {
+        //     Ok(context) => context,
+        //     Err(err) => {
+        //         println!(
+        //             "{}\n{}{}",
+        //             "The program panicked.".red(),
+        //             "Message: ".red(),
+        //             err.to_string().bright_red().bold()
+        //         );
+        //         return;
+        //     }
+        // };
+
+        // let output = context.dot;
+        // println!(
+        //     "{}\n{}{}",
+        //     "The program successfully finished.".green(),
+        //     "Output: ".green(),
+        //     output.to_string().bright_green().bold(),
+        // );
     }
 
     if let Some(_) = matches.subcommand_matches("lsp") {
