@@ -4,19 +4,21 @@ use std::{collections::hash_map::DefaultHasher, fmt};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Ast {
-    Number(i64),
+    Int(i64),
     String(String),
     Symbol(String),
     Map(HashMap<Asts, Asts>),
     List(Vec<Asts>),
     Code(Asts),
     Name(String),
+    Let(String),
+    Fun(String),
 }
 pub type Asts = Vec<Ast>;
 impl fmt::Display for Ast {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Ast::Number(number) => write!(f, "{}", number),
+            Ast::Int(int) => write!(f, "{}", int),
             Ast::String(string) => write!(f, "{:?}", string),
             Ast::Symbol(symbol) => write!(f, ":{}", symbol),
             Ast::Map(map) => write!(
@@ -45,6 +47,8 @@ impl fmt::Display for Ast {
                 itertools::join(code.iter().map(|item| format!("{}", item)), " ")
             ),
             Ast::Name(name) => write!(f, "{}", name),
+            Ast::Let(name) => write!(f, "=> {}", name),
+            Ast::Fun(name) => write!(f, "-> {}", name),
         }
     }
 }
@@ -56,7 +60,7 @@ pub fn format_code(asts: &[Ast]) -> String {
 impl Hash for Ast {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            Ast::Number(number) => number.hash(state),
+            Ast::Int(int) => int.hash(state),
             Ast::String(string) => string.hash(state),
             Ast::Symbol(symbol) => symbol.hash(state),
             Ast::Map(map) => {
@@ -73,6 +77,8 @@ impl Hash for Ast {
             Ast::List(list) => list.hash(state),
             Ast::Code(code) => code.hash(state),
             Ast::Name(name) => name.hash(state),
+            Ast::Let(name) => name.hash(state),
+            Ast::Fun(name) => name.hash(state),
         }
     }
 }
@@ -80,9 +86,9 @@ impl Ast {
     pub fn unit() -> Self {
         Self::Symbol("".into())
     }
-    pub fn as_number(self) -> Option<i64> {
+    pub fn as_int(self) -> Option<i64> {
         match self {
-            Self::Number(number) => Some(number),
+            Self::Int(int) => Some(int),
             _ => None,
         }
     }
@@ -163,12 +169,12 @@ mod parse {
         c.is_whitespace() || matches!(c, '(' | ')' | '[' | ']' | '{' | '}' | ',')
     }
 
-    /// Parses a number like `123`, `2r100100101`, or `36rax9z3l1m6`.
-    fn number(input: &str) -> ParseResult<u64> {
+    /// Parses an int like `123`, `2r100100101`, or `36rax9z3l1m6`.
+    fn int(input: &str) -> ParseResult<u64> {
         // TODO: Return BigInt.
         // TODO: Support negative numbers?
 
-        let (number_or_radix, input) = match raw_number(input, 10, true) {
+        let (number_or_radix, input) = match raw_int(input, 10, true) {
             NotApplicable => return NotApplicable,
             Parsed(number, input) => (number, input),
             Error(error, input) => return Error(error, input),
@@ -176,12 +182,12 @@ mod parse {
         if let Some('r') = input.chars().next() {
             let radix = number_or_radix as usize;
             // TODO: Check that radix is valid.
-            raw_number(&input[1..], radix, false)
+            raw_int(&input[1..], radix, false)
         } else {
             Parsed(number_or_radix, input)
         }
     }
-    fn raw_number(input: &str, radix: usize, allow_trailing_r: bool) -> ParseResult<u64> {
+    fn raw_int(input: &str, radix: usize, allow_trailing_r: bool) -> ParseResult<u64> {
         // TODO: Allow underscores.
         // TODO: Return BigInt.
 
@@ -385,14 +391,40 @@ mod parse {
         }
     }
 
+    fn let_(input: &str) -> ParseResult<String> {
+        if !input.starts_with("=>") {
+            return NotApplicable;
+        }
+        let input = remove_leading_whitespace_and_comments(&input[2..]);
+        match identifier(input) {
+            NotApplicable => Error(format!("Expected identifier here."), input),
+            Parsed(name, input) => Parsed(name, input),
+            Error(err, input) => Error(err, input),
+        }
+    }
+
+    fn fun(input: &str) -> ParseResult<String> {
+        if !input.starts_with("->") {
+            return NotApplicable;
+        }
+        let input = remove_leading_whitespace_and_comments(&input[2..]);
+        match identifier(input) {
+            NotApplicable => Error(format!("Expected identifier here."), input),
+            Parsed(name, input) => Parsed(name, input),
+            Error(err, input) => Error(err, input),
+        }
+    }
+
     fn ast(input: &str) -> ParseResult<Ast> {
         let parsers: Vec<fn(&str) -> ParseResult<Ast>> = vec![
-            |input| number(input).map_result(|number| Ast::Number(number as i64)),
+            |input| int(input).map_result(|int| Ast::Int(int as i64)),
             |input| string(input).map_result(|string| Ast::String(string)),
             |input| symbol(input).map_result(|symbol| Ast::Symbol(symbol)),
             |input| list(input).map_result(|list| Ast::List(list)),
             |input| map(input).map_result(|map| Ast::Map(map)),
             |input| code(input).map_result(|code| Ast::Code(code)),
+            |input| let_(input).map_result(|name| Ast::Let(name)),
+            |input| fun(input).map_result(|name| Ast::Fun(name)),
             |input| identifier(input).map_result(|name| Ast::Name(name)),
         ];
         for parser in parsers {
