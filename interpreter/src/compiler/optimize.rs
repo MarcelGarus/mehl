@@ -8,9 +8,10 @@ impl Ir {
         code.remove_unused_statements();
         code.make_primitives_concrete();
         code.remove_unused_statements();
-        println!("{}", code);
         code.inline_code();
         code.inline_code();
+        code.remove_unused_statements();
+        code.run_pure_primitives();
         code.remove_unused_statements();
     }
 }
@@ -236,6 +237,53 @@ impl Code {
             }
 
             statements.insert(id, self.get(id).unwrap().clone());
+        }
+    }
+}
+
+// Pure primitives can be executed right away if all their inputs are known.
+
+impl Code {
+    fn run_pure_primitives(&mut self) {
+        self.run_pure_primitives_helper(&im::HashMap::new());
+    }
+    fn run_pure_primitives_helper(&mut self, statements: &im::HashMap<Id, Statement>) {
+        let mut statements = statements.clone();
+        for (id, statement) in self.iter_mut() {
+            let clone = statement.clone();
+            if let Statement::Primitive { kind, arg } = statement {
+                if clone.is_pure() {
+                    if let Some(result) = Self::run_pure_primitive(kind, *arg, &statements) {
+                        *statement = result;
+                    }
+                }
+            }
+            statements.insert(id, clone);
+        }
+    }
+    fn run_pure_primitive(
+        kind: &Primitive,
+        arg: Id,
+        statements: &im::HashMap<Id, Statement>,
+    ) -> Option<Statement> {
+        match kind {
+            Primitive::Add => {
+                let list = match statements.get(&arg).unwrap() {
+                    Statement::List(list) => list,
+                    _ => return None,
+                };
+                let numbers = list
+                    .iter()
+                    .map(|id| match statements.get(id).unwrap().clone() {
+                        Statement::Int(int) => Some(int),
+                        _ => return None,
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>();
+                let sum: i64 = numbers.into_iter().sum();
+                Some(Statement::Int(sum))
+            }
+            _ => panic!("Unknown pure primitive {:?}.", kind),
         }
     }
 }
