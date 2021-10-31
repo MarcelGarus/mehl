@@ -82,53 +82,6 @@ impl Hash for Ast {
         }
     }
 }
-impl Ast {
-    pub fn unit() -> Self {
-        Self::Symbol("".into())
-    }
-    pub fn as_int(self) -> Option<i64> {
-        match self {
-            Self::Int(int) => Some(int),
-            _ => None,
-        }
-    }
-    pub fn as_string(self) -> Option<String> {
-        match self {
-            Self::String(string) => Some(string),
-            _ => None,
-        }
-    }
-    pub fn as_symbol(self) -> Option<String> {
-        match self {
-            Self::Symbol(symbol) => Some(symbol),
-            _ => None,
-        }
-    }
-    pub fn as_map(self) -> Option<HashMap<Asts, Asts>> {
-        match self {
-            Self::Map(map) => Some(map),
-            _ => None,
-        }
-    }
-    pub fn as_list(self) -> Option<Vec<Asts>> {
-        match self {
-            Self::List(list) => Some(list),
-            _ => None,
-        }
-    }
-    pub fn as_code(self) -> Option<Asts> {
-        match self {
-            Self::Code(code) => Some(code),
-            _ => None,
-        }
-    }
-    pub fn as_name(self) -> Option<String> {
-        match self {
-            Self::Name(name) => Some(name),
-            _ => None,
-        }
-    }
-}
 
 pub trait MapGetStrSymbolExt {
     fn get_symbol(&self, key: &str) -> Option<&Ast>;

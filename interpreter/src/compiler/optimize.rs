@@ -4,8 +4,9 @@ use std::collections::{HashMap, HashSet};
 impl Ir {
     pub fn optimize(&mut self) {
         let code = &mut self.code;
-        code.remove_unused_statements();
         code.deduplicate_statements();
+        code.remove_unused_statements();
+        code.make_primitives_concrete();
         code.remove_unused_statements();
     }
 }
@@ -19,7 +20,12 @@ impl Statement {
             | Statement::Map(_)
             | Statement::List(_)
             | Statement::Code { .. } => true,
-            Statement::Call { .. } | Statement::Primitive { .. } => false,
+            Statement::Call { .. } => false,
+            Statement::Primitive { kind, .. } => match kind {
+                Primitive::Magic => false,
+                Primitive::Add => true,
+                Primitive::Print => false,
+            },
         }
     }
 }
@@ -46,7 +52,6 @@ impl Code {
                 statement.collect_used_ids(&mut used);
             }
         }
-        println!("Removing {:?}", removable);
         for id in removable {
             self.replace_range(id, 1, vec![], HashMap::new());
         }
@@ -79,7 +84,7 @@ impl Statement {
                 used.insert(*fun);
                 used.insert(*arg);
             }
-            Statement::Primitive { arg } => {
+            Statement::Primitive { arg, .. } => {
                 used.insert(*arg);
             }
         }
@@ -95,10 +100,12 @@ impl Code {
     }
 
     fn deduplicate_statements_helper(&mut self, mut pure_statements: im::HashMap<Statement, Id>) {
+        // Note: Not using a for with range here because the length is still
+        // changing while we iterate.
         let mut id = self.in_;
         while id < self.next_id() - 1 {
             id += 1;
-            let statement = self.get_mut(id);
+            let statement = self.get_mut(id).unwrap();
             if !statement.is_pure() {
                 continue;
             }
@@ -106,7 +113,7 @@ impl Code {
                 code.deduplicate_statements_helper(pure_statements.clone());
             }
 
-            match pure_statements.get(statement) {
+            match pure_statements.get(&statement) {
                 Some(existing_id) => {
                     let mut update = HashMap::new();
                     update.insert(id, *existing_id);
@@ -120,8 +127,68 @@ impl Code {
     }
 }
 
+/// If we can statically determine, which primitive will be called, make it
+/// concrete.
+
+impl Code {
+    fn make_primitives_concrete(&mut self) {
+        self.make_primitives_concrete_helper(&im::HashMap::new())
+    }
+
+    fn make_primitives_concrete_helper(&mut self, statements: &im::HashMap<Id, Statement>) {
+        let mut statements = statements.clone();
+        for id in self.in_ + 1..self.next_id() {
+            let statement = self.get_mut(id).unwrap();
+
+            if let Statement::Code(code) = statement {
+                code.make_primitives_concrete_helper(&statements);
+            }
+
+            statements.insert(id, statement.clone());
+            let statement = statement.clone();
+            if let Some(concrete) = statement.try_making_concrete(&statements) {
+                let mut updates = HashMap::new();
+                updates.insert(id, id);
+                self.replace_range(id, 1, vec![concrete], updates);
+            }
+        }
+    }
+}
+
+impl Statement {
+    fn try_making_concrete(&self, statements: &im::HashMap<Id, Statement>) -> Option<Statement> {
+        let arg = match self {
+            Statement::Primitive {
+                kind: Primitive::Magic,
+                arg,
+            } => *arg,
+            _ => return None,
+        };
+        let arg = match statements.get(&arg).unwrap() {
+            Statement::List(list) => list,
+            _ => return None,
+        };
+        if arg.len() != 2 {
+            return None;
+        }
+        let primitive = arg[0];
+        let arg = arg[1];
+        let primitive = match statements.get(&primitive).unwrap().clone() {
+            Statement::Symbol(symbol) => symbol,
+            _ => return None,
+        };
+
+        let kind = match primitive.as_str() {
+            "add" => Primitive::Add,
+            "print" => Primitive::Print,
+            _ => return None,
+        };
+        Some(Statement::Primitive { kind, arg })
+    }
+}
+
 // Inline code.
-// Make primitives concrete.
 // Execute pure primitives.
-// Move constants out of code. Needed after inlining?
 // Intern symbols.
+// Split primitive calls with known return value into two statements.
+// Remove pure statements before panic.

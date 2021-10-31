@@ -1,9 +1,10 @@
+:print
 [(:print, .) ✨] -> print
 
 "Hello, world!" => a
 a print
 
-[5 "Hi from foo!" print] -> foo
+[(1, 2) (:add, .) ✨ print] -> foo
 foo
 
 # ...

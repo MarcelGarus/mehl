@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::{collections::HashMap, fmt, mem};
+use std::{collections::HashMap, fmt};
 
 pub type Id = u32;
 
@@ -12,7 +12,13 @@ pub enum Statement {
     List(Vec<Id>),
     Code(Code),
     Call { fun: Id, arg: Id },
-    Primitive { arg: Id },
+    Primitive { kind: Primitive, arg: Id },
+}
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Primitive {
+    Magic, // the exact type is unknown and will be passed as an argument at runtime
+    Add,
+    Print,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -36,7 +42,7 @@ impl Code {
     pub fn new(in_: Id, out: Id) -> Self {
         Self {
             in_,
-            out: out,
+            out,
             statements: vec![],
         }
     }
@@ -53,16 +59,26 @@ impl Code {
         self.out = id;
         id
     }
-    pub fn get(&self, id: Id) -> &Statement {
-        &self.statements[(id - self.in_ - 1) as usize]
+    pub fn get(&self, id: Id) -> Option<&Statement> {
+        let index = id as i64 - self.in_ as i64 - 1;
+        if index < 0 {
+            None
+        } else {
+            self.statements.get(index as usize)
+        }
     }
-    pub fn get_mut(&mut self, id: Id) -> &mut Statement {
-        &mut self.statements[(id - self.in_ - 1) as usize]
+    pub fn get_mut(&mut self, id: Id) -> Option<&mut Statement> {
+        let index = id as i64 - self.in_ as i64 - 1;
+        if index < 0 {
+            None
+        } else {
+            self.statements.get_mut(index as usize)
+        }
     }
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Id, &Statement)> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Id, Statement)> {
         Iter {
             shift: self.in_ + 1,
-            inner: self.statements.iter().enumerate(),
+            inner: self.statements.clone().into_iter().enumerate(),
         }
     }
     pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = (Id, &mut Statement)> {
@@ -128,7 +144,8 @@ impl std::hash::Hash for Statement {
                 fun.hash(state);
                 arg.hash(state);
             }
-            Statement::Primitive { arg } => {
+            Statement::Primitive { kind, arg } => {
+                kind.hash(state);
                 arg.hash(state);
             }
         }
@@ -154,7 +171,7 @@ impl fmt::Display for Statement {
                 )
             }
             Statement::Call { fun, arg } => write!(f, "call {}({})", fun, arg),
-            Statement::Primitive { arg } => write!(f, "primitive {}", arg),
+            Statement::Primitive { kind, arg } => write!(f, "primitive {:?} {}", kind, arg),
         }
     }
 }
@@ -209,6 +226,12 @@ impl Code {
         replacement: Vec<Statement>,
         reference_replacements: HashMap<Id, Id>,
     ) {
+        // println!(
+        //     "Optimizer: Replacing {} len {} with {} statements.",
+        //     start,
+        //     length,
+        //     replacement.len()
+        // );
         let mut statements = vec![];
 
         let start = start;
@@ -233,24 +256,27 @@ impl Code {
         // replaced range get shifted – the replacement may have a different
         // length than the replaced statements.
         let shift = replacement.len() as isize - length as isize;
+        let transform = |id| {
+            if id < start {
+                id
+            } else if id >= end {
+                (id as isize + shift) as u32
+            } else {
+                *reference_replacements.get(&id).expect(&format!(
+                    "Reference to ID {} in replaced range with no replacement.",
+                    id
+                ))
+            }
+        };
         for statement in &mut self.statements[end_index as usize..] {
             let mut statement = statement.clone();
-            statement.replace_ids(&|id| {
-                if id < start {
-                    id
-                } else if id >= end {
-                    (id as isize + shift) as u32
-                } else {
-                    *reference_replacements.get(&id).expect(&format!(
-                        "Reference to ID {} in replaced range with no replacement.",
-                        id
-                    ))
-                }
-            });
+            statement.replace_ids(&transform);
             statements.push(statement);
         }
 
-        mem::replace(&mut self.statements, statements);
+        self.statements = statements;
+        self.in_ = transform(self.in_);
+        self.out = transform(self.out);
     }
 }
 
@@ -270,10 +296,8 @@ impl Statement {
                 *list = new_list;
             }
             Statement::Code(code) => {
-                let in_ = code.in_;
-                mem::replace(&mut code.in_, transform(in_));
-                let out = code.out;
-                mem::replace(&mut code.out, transform(out));
+                code.in_ = transform(code.in_);
+                code.out = transform(code.out);
                 for (_, statement) in code.iter_mut() {
                     statement.replace_ids(transform);
                 }
@@ -282,7 +306,7 @@ impl Statement {
                 *fun = transform(*fun);
                 *arg = transform(*arg);
             }
-            Statement::Primitive { arg } => {
+            Statement::Primitive { arg, .. } => {
                 *arg = transform(*arg);
             }
         }
