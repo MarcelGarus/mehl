@@ -3,9 +3,10 @@ use std::collections::{HashMap, HashSet};
 
 impl Ir {
     pub fn optimize(&mut self) {
-        self.remove_unused_statements();
-        // self.deduplicate_statements();
-        // self.remove_unused_statements();
+        let code = &mut self.code;
+        code.remove_unused_statements();
+        code.deduplicate_statements();
+        code.remove_unused_statements();
     }
 }
 
@@ -25,21 +26,15 @@ impl Statement {
 
 /// Pure statements with an unused result can be removed.
 
-impl Ir {
+impl Code {
     fn remove_unused_statements(&mut self) {
-        self.statements.remove_unused_statements(self.out);
-    }
-}
-
-impl Statements {
-    fn remove_unused_statements(&mut self, out: Id) {
         let mut used = HashSet::new();
         let mut removable = vec![];
 
-        used.insert(out);
+        used.insert(self.out);
         for (id, statement) in self.iter_mut().rev() {
-            if let Statement::Code { statements, out } = statement {
-                statements.remove_unused_statements(*out);
+            if let Statement::Code(code) = statement {
+                code.remove_unused_statements();
             }
             if !used.contains(&id) {
                 if statement.is_pure() {
@@ -51,6 +46,7 @@ impl Statements {
                 statement.collect_used_ids(&mut used);
             }
         }
+        println!("Removing {:?}", removable);
         for id in removable {
             self.replace_range(id, 1, vec![], HashMap::new());
         }
@@ -72,10 +68,10 @@ impl Statement {
                     used.insert(*item);
                 }
             }
-            Statement::Code { out, statements } => {
-                // used.insert(*statements.first_id);
-                used.insert(*out);
-                for (_, statement) in statements.iter() {
+            Statement::Code(code) => {
+                used.insert(code.in_);
+                used.insert(code.out);
+                for (_, statement) in code.iter() {
                     statement.collect_used_ids(used);
                 }
             }
@@ -90,32 +86,40 @@ impl Statement {
     }
 }
 
-// impl Ir {
-//     // Deduplicates pure statements.
-//     fn deduplicate_statements(&mut self) {
-//         let mut pure_statements = HashMap::new();
-//         let mut replace = HashMap::new();
+/// Deduplicated pure statements can be removed, so the result of the first one
+/// is reused.
 
-//         for (id, statement) in self.statements.iter_mut() {
-//             if statement.is_pure() {
-//                 let statement = statement.clone();
-//                 match pure_statements.get(&statement) {
-//                     Some(existing_id) => {
-//                         replace.insert(*id, *existing_id);
-//                     }
-//                     None => {
-//                         pure_statements.insert(statement.clone(), *id);
-//                     }
-//                 }
-//             }
-//             for (old, new) in replace.iter() {
-//                 statement.replace_id_usage(*old, *new);
-//             }
-//         }
-//     }
-// }
+impl Code {
+    fn deduplicate_statements(&mut self) {
+        self.deduplicate_statements_helper(im::HashMap::new());
+    }
 
-// Meta: Optimize saved code.
+    fn deduplicate_statements_helper(&mut self, mut pure_statements: im::HashMap<Statement, Id>) {
+        let mut id = self.in_;
+        while id < self.next_id() - 1 {
+            id += 1;
+            let statement = self.get_mut(id);
+            if !statement.is_pure() {
+                continue;
+            }
+            if let Statement::Code(code) = statement {
+                code.deduplicate_statements_helper(pure_statements.clone());
+            }
+
+            match pure_statements.get(statement) {
+                Some(existing_id) => {
+                    let mut update = HashMap::new();
+                    update.insert(id, *existing_id);
+                    self.replace_range(id, 1, vec![], update);
+                }
+                None => {
+                    pure_statements.insert(statement.clone(), id);
+                }
+            }
+        }
+    }
+}
+
 // Inline code.
 // Make primitives concrete.
 // Execute pure primitives.

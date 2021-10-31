@@ -10,50 +10,72 @@ pub enum Statement {
     Symbol(String),
     Map(HashMap<Id, Id>),
     List(Vec<Id>),
-    Code { statements: Statements, out: Id },
+    Code(Code),
     Call { fun: Id, arg: Id },
     Primitive { arg: Id },
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Statements {
-    first_id: Id,
+pub struct Code {
+    pub in_: Id,
+    pub out: Id,
     statements: Vec<Statement>,
 }
 
 pub struct Ir {
-    pub statements: Statements,
-    pub out: Id,
+    pub code: Code,
 }
 
-impl Statements {
-    pub fn new(first_id: Id) -> Self {
+impl Statement {
+    pub fn unit() -> Self {
+        Self::Symbol("".into())
+    }
+}
+
+impl Code {
+    pub fn new(in_: Id, out: Id) -> Self {
         Self {
-            first_id,
+            in_,
+            out: out,
             statements: vec![],
         }
     }
     pub fn next_id(&self) -> Id {
-        self.first_id + (self.statements.len() as u32)
+        self.in_ + (self.statements.len() as u32) + 1
+    }
+    pub fn push_without_changing_dot(&mut self, statement: Statement) -> Id {
+        let id = self.next_id();
+        self.statements.push(statement);
+        id
     }
     pub fn push(&mut self, statement: Statement) -> Id {
-        self.statements.push(statement);
-        self.next_id() - 1
+        let id = self.push_without_changing_dot(statement);
+        self.out = id;
+        id
+    }
+    pub fn get(&self, id: Id) -> &Statement {
+        &self.statements[(id - self.in_ - 1) as usize]
+    }
+    pub fn get_mut(&mut self, id: Id) -> &mut Statement {
+        &mut self.statements[(id - self.in_ - 1) as usize]
     }
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Id, &Statement)> {
         Iter {
-            shift: self.first_id,
+            shift: self.in_ + 1,
             inner: self.statements.iter().enumerate(),
         }
     }
     pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = (Id, &mut Statement)> {
         Iter {
-            shift: self.first_id,
+            shift: self.in_ + 1,
             inner: self.statements.iter_mut().enumerate(),
         }
     }
-    pub fn child(&self) -> Self {
-        Self::new(self.next_id())
+    pub fn child(&self, out: Id) -> Self {
+        Self::new(self.next_id(), out)
+    }
+    pub fn child_identity(&self) -> Self {
+        Self::new(self.next_id(), self.next_id())
     }
 }
 pub struct Iter<T, I: Iterator<Item = (usize, T)>> {
@@ -93,9 +115,14 @@ impl std::hash::Hash for Statement {
                 hash.hash(state);
             }
             Statement::List(list) => list.hash(state),
-            Statement::Code { statements, out } => {
-                statements.hash(state);
+            Statement::Code(Code {
+                in_,
+                out,
+                statements,
+            }) => {
+                in_.hash(state);
                 out.hash(state);
+                statements.hash(state);
             }
             Statement::Call { fun, arg } => {
                 fun.hash(state);
@@ -116,17 +143,14 @@ impl fmt::Display for Statement {
             Statement::Symbol(symbol) => write!(f, "symbol :{}", symbol),
             Statement::Map(map) => write!(f, "map {:?}", map),
             Statement::List(list) => write!(f, "list {:?}", list),
-            Statement::Code { statements, out } => {
+            Statement::Code(code) => {
                 write!(
                     f,
-                    "code [\n  in: {}\n{}  out: {}\n]",
-                    statements.first_id,
-                    statements
-                        .to_string()
+                    "code [\n{}\n]",
+                    code.to_string()
                         .lines()
-                        .map(|line| format!("  {}\n", line))
-                        .join(""),
-                    out
+                        .map(|line| format!("  {}", line))
+                        .join("\n"),
                 )
             }
             Statement::Call { fun, arg } => write!(f, "call {}({})", fun, arg),
@@ -134,23 +158,24 @@ impl fmt::Display for Statement {
         }
     }
 }
-impl fmt::Display for Statements {
+impl fmt::Display for Code {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "in: {}\n", self.in_)?;
         for (id, action) in self.iter() {
             write!(f, "{} = {}\n", id, action)?;
         }
+        write!(f, "out: {}\n", self.out)?;
         Ok(())
     }
 }
 
 impl fmt::Display for Ir {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}out: {}", self.statements, self.out)?;
-        Ok(())
+        write!(f, "{}", self.code)
     }
 }
 
-impl Statements {
+impl Code {
     /// Replaces a range of the statements with some other statements. Updates
     /// all later references into the range using the `reference_replacements`.
     ///
@@ -188,8 +213,8 @@ impl Statements {
 
         let start = start;
         let end = start + length as u32;
-        let start_index = start as usize - self.first_id as usize;
-        let end_index = end as usize - self.first_id as usize;
+        let start_index = start as usize - self.in_ as usize - 1;
+        let end_index = end as usize - self.in_ as usize - 1;
 
         // The statements before the replaced part stay the same.
         for statement in &self.statements[0..start_index] {
@@ -244,12 +269,12 @@ impl Statement {
                 let new_list = list.into_iter().map(|id| transform(*id)).collect();
                 *list = new_list;
             }
-            Statement::Code { statements, out } => {
-                let first_id = statements.first_id;
-                mem::replace(&mut statements.first_id, transform(first_id));
-                // *statements.first_id = transform(*statements.first_id);
-                *out = transform(*out);
-                for (_, statement) in statements.iter_mut() {
+            Statement::Code(code) => {
+                let in_ = code.in_;
+                mem::replace(&mut code.in_, transform(in_));
+                let out = code.out;
+                mem::replace(&mut code.out, transform(out));
+                for (_, statement) in code.iter_mut() {
                     statement.replace_ids(transform);
                 }
             }

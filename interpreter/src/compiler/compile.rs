@@ -4,24 +4,23 @@ use std::collections::HashMap;
 
 pub fn compile(asts: Asts) -> Ir {
     let mut compiler = Compiler {
-        statements: Statements::new(0),
+        code: Code::new(0, 0),
         funs: HashMap::new(),
     };
-    let dot = compiler.push(Statement::Symbol("".into()));
-    let dot = compiler.compile(dot, asts);
+    let dot = compiler.push(Statement::unit());
+    compiler.compile(dot, asts);
     Ir {
-        statements: compiler.statements,
-        out: dot,
+        code: compiler.code,
     }
 }
 
 struct Compiler {
-    statements: Statements,
+    code: Code,
     funs: HashMap<String, Id>,
 }
 impl Compiler {
     fn push(&mut self, action: Statement) -> Id {
-        self.statements.push(action)
+        self.code.push(action)
     }
 }
 
@@ -56,14 +55,11 @@ impl Compiler {
             }
             Ast::Code(code) => {
                 let mut inner = Compiler {
-                    statements: self.statements.child(),
+                    code: self.code.child_identity(),
                     funs: self.funs.clone(),
                 };
-                let out = inner.compile(self.statements.next_id(), code);
-                self.push(Statement::Code {
-                    out,
-                    statements: inner.statements,
-                })
+                inner.compile(inner.code.in_, code);
+                self.push(Statement::Code(inner.code))
             }
             Ast::Name(name) => match name.as_str() {
                 "." => dot,
@@ -77,16 +73,13 @@ impl Compiler {
                 }),
             },
             Ast::Let(name) => {
-                let dot = self.push(Statement::Code {
-                    out: dot,
-                    statements: self.statements.child(),
-                });
-                self.funs.insert(name, dot);
-                self.push(Statement::Symbol("".into()))
+                let code = self.push(Statement::Code(self.code.child(dot)));
+                self.funs.insert(name, code);
+                self.push(Statement::unit())
             }
             Ast::Fun(name) => {
                 self.funs.insert(name, dot);
-                self.push(Statement::Symbol("".into()))
+                self.push(Statement::unit())
             }
         }
     }
