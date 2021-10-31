@@ -8,6 +8,10 @@ impl Ir {
         code.remove_unused_statements();
         code.make_primitives_concrete();
         code.remove_unused_statements();
+        println!("{}", code);
+        code.inline_code();
+        code.inline_code();
+        code.remove_unused_statements();
     }
 }
 
@@ -187,7 +191,55 @@ impl Statement {
     }
 }
 
-// Inline code.
+/// A call to some code can instead insert the code right there and adjust the
+/// IDs.
+
+impl Code {
+    fn inline_code(&mut self) {
+        self.inline_code_helper(&im::HashMap::new());
+    }
+    fn inline_code_helper(&mut self, statements: &im::HashMap<Id, Statement>) {
+        let mut statements = statements.clone();
+        for id in self.in_ + 1..self.next_id() {
+            if let Statement::Call { fun, arg } = self.get(id).unwrap().clone() {
+                if let Statement::Code(code) = statements.get(&fun).unwrap() {
+                    let mut code = code.clone();
+                    let in_ = code.in_;
+                    let shift = id - in_ - 1;
+                    code.replace_ids(&|it| {
+                        if it == in_ {
+                            arg
+                        } else if it > in_ {
+                            it + shift
+                        } else {
+                            it
+                        }
+                    });
+
+                    let mut updates = HashMap::new();
+                    updates.insert(id, code.out + shift);
+
+                    self.replace_range(
+                        id,
+                        1,
+                        code.iter()
+                            .map(|(_, statement)| statement)
+                            .collect::<Vec<_>>(),
+                        updates,
+                    );
+                }
+                continue;
+            }
+
+            if let Statement::Code(code) = self.get_mut(id).unwrap() {
+                code.inline_code_helper(&statements);
+            }
+
+            statements.insert(id, self.get(id).unwrap().clone());
+        }
+    }
+}
+
 // Execute pure primitives.
 // Intern symbols.
 // Split primitive calls with known return value into two statements.

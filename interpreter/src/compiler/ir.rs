@@ -278,6 +278,12 @@ impl Code {
         self.in_ = transform(self.in_);
         self.out = transform(self.out);
     }
+
+    pub fn replace_ids<F: Fn(Id) -> Id>(&mut self, transform: &F) {
+        for (_, statement) in self.iter_mut() {
+            statement.replace_ids(transform);
+        }
+    }
 }
 
 impl Statement {
