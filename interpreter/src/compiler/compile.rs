@@ -4,8 +4,7 @@ use std::collections::HashMap;
 
 pub fn compile(asts: Asts) -> Ir {
     let mut compiler = Compiler {
-        next_id: 0,
-        statements: Statements::new(),
+        statements: Statements::new(0),
         funs: HashMap::new(),
     };
     let dot = compiler.push(Statement::Symbol("".into()));
@@ -17,16 +16,12 @@ pub fn compile(asts: Asts) -> Ir {
 }
 
 struct Compiler {
-    next_id: Id,
     statements: Statements,
     funs: HashMap<String, Id>,
 }
 impl Compiler {
     fn push(&mut self, action: Statement) -> Id {
-        let id = self.next_id;
-        self.next_id += 1;
-        self.statements.push(id, action);
-        id
+        self.statements.push(action)
     }
 }
 
@@ -61,13 +56,11 @@ impl Compiler {
             }
             Ast::Code(code) => {
                 let mut inner = Compiler {
-                    next_id: self.next_id + 1,
-                    statements: Statements::new(),
+                    statements: self.statements.child(),
                     funs: self.funs.clone(),
                 };
-                let out = inner.compile(self.next_id, code);
+                let out = inner.compile(self.statements.next_id(), code);
                 self.push(Statement::Code {
-                    in_: self.next_id,
                     out,
                     statements: inner.statements,
                 })
@@ -85,9 +78,8 @@ impl Compiler {
             },
             Ast::Let(name) => {
                 let dot = self.push(Statement::Code {
-                    in_: self.next_id,
                     out: dot,
-                    statements: Statements::new(),
+                    statements: self.statements.child(),
                 });
                 self.funs.insert(name, dot);
                 self.push(Statement::Symbol("".into()))

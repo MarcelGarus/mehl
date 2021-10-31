@@ -3,7 +3,7 @@
 "Hello, world!" => a
 a print
 
-["Hi from foo!" print] -> foo
+[5 "Hi from foo!" print] -> foo
 foo
 
 # ...
