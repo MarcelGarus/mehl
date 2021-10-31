@@ -2,15 +2,18 @@ use super::ir::*;
 use crate::ast::{Ast, Asts};
 use std::collections::HashMap;
 
-pub fn compile(asts: Asts) -> Statements {
+pub fn compile(asts: Asts) -> Ir {
     let mut compiler = Compiler {
         next_id: 0,
         statements: Statements::new(),
         funs: HashMap::new(),
     };
     let dot = compiler.push(Statement::Symbol("".into()));
-    compiler.compile(dot, asts);
-    compiler.statements
+    let dot = compiler.compile(dot, asts);
+    Ir {
+        statements: compiler.statements,
+        out: dot,
+    }
 }
 
 struct Compiler {
