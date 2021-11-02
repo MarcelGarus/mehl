@@ -1,6 +1,5 @@
-mod compile;
-mod ir;
-mod optimize;
+mod ast_to_hir;
+mod hir;
+mod optimize_hir;
 
-pub use compile::compile;
-pub use ir::*;
+pub use ast_to_hir::compile;

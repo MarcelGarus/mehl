@@ -132,28 +132,32 @@
 
 ### Todo
 
-# * =
-# * bignum
-# * pow
-# * use Rc
-# * maps
-# * lists
-# * strings
-# * maybe
-# * output
-# * input
-# * iterate
-# * random
-# * units
-# * memory management
-# * fibers
-# * http get
-# * FFI
-# * wrong-usage
-# * propagate-wrong-usage
-# * channels
-# * ambients
-# * testing
+# - bytecode
+# - VM
+# - =
+# - bignum
+# - pow
+# - use Rc
+# - maps
+# - lists
+# - strings
+# - maybe
+# - output
+# - input
+# - iterate
+# - random
+# - units
+# - memory management
+# - fibers
+# - http get
+# - FFI
+# - wrong-usage
+# - propagate-wrong-usage
+# - channels
+# - ambients
+# - testing
+# - LSP
+# - Automatic property-based testing
 
 ##########
 

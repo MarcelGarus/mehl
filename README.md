@@ -21,12 +21,3 @@ Multiple inputs or outputs can only be modled using tuples.
 ## For most values, immutability feels natural
 
 ## Actors are a fundamental thing of life
-
-
-
-Constraints
-
-- Stack-based
-- Dynamic
-  - Dynamic dispatch
-- Fibers and channels for concurrency

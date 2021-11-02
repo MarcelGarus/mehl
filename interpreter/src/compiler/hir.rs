@@ -28,10 +28,6 @@ pub struct Code {
     statements: Vec<Statement>,
 }
 
-pub struct Ir {
-    pub code: Code,
-}
-
 impl Statement {
     pub fn unit() -> Self {
         Self::Symbol("".into())
@@ -183,12 +179,6 @@ impl fmt::Display for Code {
         }
         write!(f, "out: {}\n", self.out)?;
         Ok(())
-    }
-}
-
-impl fmt::Display for Ir {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.code)
     }
 }
 

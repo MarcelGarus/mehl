@@ -1,17 +1,15 @@
-use super::ir::*;
+use super::hir::*;
 use crate::ast::{Ast, Asts};
 use std::collections::HashMap;
 
-pub fn compile(asts: Asts) -> Ir {
+pub fn compile(asts: Asts) -> Code {
     let mut compiler = Compiler {
         code: Code::new(0, 0),
         funs: HashMap::new(),
     };
     let dot = compiler.push(Statement::unit());
     compiler.compile(dot, asts);
-    Ir {
-        code: compiler.code,
-    }
+    compiler.code
 }
 
 struct Compiler {

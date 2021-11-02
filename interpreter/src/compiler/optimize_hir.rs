@@ -1,22 +1,38 @@
-use super::*;
+use super::hir::*;
 use std::collections::{HashMap, HashSet};
 
-impl Ir {
+impl Code {
     pub fn optimize(&mut self) {
-        let code = &mut self.code;
-        code.deduplicate_statements();
-        code.remove_unused_statements();
-        code.make_primitives_concrete();
-        code.remove_unused_statements();
-        code.inline_code();
-        code.inline_code();
-        code.remove_unused_statements();
-        code.run_pure_primitives();
-        code.remove_unused_statements();
+        // TODO: Optimize more intelligently.
+        let mut size = self.size();
+        loop {
+            self.deduplicate_statements();
+            self.remove_unused_statements();
+            self.make_primitives_concrete();
+            self.run_pure_primitives();
+            self.inline_code();
+
+            if size == self.size() {
+                break;
+            }
+            size = self.size();
+        }
+    }
+
+    /// An estimate how complex the code is.
+    fn size(&self) -> u64 {
+        self.iter().map(|(_, statement)| statement.size()).sum()
     }
 }
 
 impl Statement {
+    fn size(&self) -> u64 {
+        match self {
+            Statement::Code(code) => 1 + code.size(),
+            _ => 1,
+        }
+    }
+
     fn is_pure(&self) -> bool {
         match self {
             Statement::Int(_)
@@ -24,7 +40,7 @@ impl Statement {
             | Statement::Symbol(_)
             | Statement::Map(_)
             | Statement::List(_)
-            | Statement::Code { .. } => true,
+            | Statement::Code(_) => true,
             Statement::Call { .. } => false,
             Statement::Primitive { kind, .. } => match kind {
                 Primitive::Magic => false,
