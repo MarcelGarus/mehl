@@ -1,5 +1,6 @@
 use itertools::Itertools;
-use std::{collections::HashMap, fmt};
+use std::collections::{HashMap, HashSet};
+use std::fmt;
 
 pub type Id = u32;
 
@@ -14,7 +15,7 @@ pub enum Statement {
     Call { fun: Id, arg: Id },
     Primitive { kind: Primitive, arg: Id },
 }
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Primitive {
     Magic, // the exact type is unknown and will be passed as an argument at runtime
     Add,
@@ -304,6 +305,39 @@ impl Statement {
             }
             Statement::Primitive { arg, .. } => {
                 *arg = transform(*arg);
+            }
+        }
+    }
+}
+
+impl Statement {
+    pub fn collect_used_ids(&self, used: &mut HashSet<Id>) {
+        match self {
+            Statement::Int(_) | Statement::String(_) | Statement::Symbol(_) => {}
+            Statement::Map(map) => {
+                for (key, value) in map {
+                    used.insert(*key);
+                    used.insert(*value);
+                }
+            }
+            Statement::List(list) => {
+                for item in list {
+                    used.insert(*item);
+                }
+            }
+            Statement::Code(code) => {
+                used.insert(code.in_);
+                used.insert(code.out);
+                for (_, statement) in code.iter() {
+                    statement.collect_used_ids(used);
+                }
+            }
+            Statement::Call { fun, arg } => {
+                used.insert(*fun);
+                used.insert(*arg);
+            }
+            Statement::Primitive { arg, .. } => {
+                used.insert(*arg);
             }
         }
     }

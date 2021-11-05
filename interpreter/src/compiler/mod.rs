@@ -1,5 +1,5 @@
-mod ast_to_hir;
+pub mod ast_to_hir;
 mod hir;
+pub mod hir_to_lir;
+mod lir;
 mod optimize_hir;
-
-pub use ast_to_hir::compile;

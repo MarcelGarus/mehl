@@ -33,7 +33,7 @@ async fn main() {
         println!("Running test.mehl.");
         let core = {
             let code = std::fs::read_to_string("core.mehl").expect("File core.mehl not found.");
-            match Ast::parse_all(&code) {
+            match ast::Ast::parse_all(&code) {
                 Ok(it) => it,
                 Err(err) => panic!("Couldn't parse ASTs of core.mehl: {}", err),
             }
@@ -41,20 +41,22 @@ async fn main() {
         println!("Core parsed.");
         let user = {
             let code = std::fs::read_to_string("test.mehl").expect("File test.mehl not found.");
-            match Ast::parse_all(&code) {
+            match ast::Ast::parse_all(&code) {
                 Ok(it) => it,
                 Err(err) => panic!("Couldn't parse ASTs of test.mehl: {}", err),
             }
         };
         println!("Test parsed.");
 
-        println!("Code: {}", format_code(&user));
+        println!("Code: {}", ast::format_code(&user));
 
-        let mut statements = compile(user);
-        println!("{}", statements);
-        println!("Optimized:");
-        statements.optimize();
-        println!("{}", statements);
+        let mut code = ast_to_hir::compile(user);
+        println!("HIR: {}", code);
+        println!("Optimizing...");
+        code.optimize();
+        println!("Optimized HIR: {}", code);
+        let code = hir_to_lir::compile(&code);
+        println!("LIR: {}", code);
 
         // let mut fiber = runner::Runtime::default();
         // let context = runner::Context::root(&mut fiber);
