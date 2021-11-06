@@ -1,11 +1,11 @@
+use super::ast::{Ast, Asts};
 use super::hir::*;
-use crate::ast::{Ast, Asts};
 use std::collections::HashMap;
 
-pub trait CompileAsts {
+pub trait CompileAstsToHir {
     fn compile_to_hir(self) -> Code;
 }
-impl CompileAsts for Asts {
+impl CompileAstsToHir for Asts {
     fn compile_to_hir(self) -> Code {
         let mut compiler = Compiler {
             code: Code::new(0, 0),
@@ -30,7 +30,7 @@ impl Compiler {
 impl Compiler {
     fn compile(&mut self, dot: Id, asts: Asts) -> Id {
         let mut dot = dot;
-        for ast in asts {
+        for ast in asts.into_iter() {
             dot = self.compile_single(dot, ast);
         }
         dot

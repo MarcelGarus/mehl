@@ -1,8 +1,6 @@
-mod ast;
 mod compiler;
 mod runner;
 
-use ast::*;
 use clap::{App, SubCommand};
 use colored::Colorize;
 use compiler::*;
@@ -10,8 +8,6 @@ use lspower::jsonrpc::Result;
 use lspower::lsp::*;
 use lspower::{Client, LanguageServer, LspService, Server};
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
-
-use crate::compiler::ast_to_hir::CompileAsts;
 
 #[tokio::main]
 async fn main() {
@@ -35,7 +31,7 @@ async fn main() {
         println!("Running test.mehl.");
         let _core_code = {
             let code = std::fs::read_to_string("core.mehl").expect("File core.mehl not found.");
-            match ast::Ast::parse_all(&code) {
+            match code.parse_to_asts() {
                 Ok(it) => it,
                 Err(err) => panic!("Couldn't parse ASTs of core.mehl: {}", err),
             }
@@ -43,14 +39,14 @@ async fn main() {
         println!("Core parsed.");
         let user_code = {
             let code = std::fs::read_to_string("test.mehl").expect("File test.mehl not found.");
-            match ast::Ast::parse_all(&code) {
+            match code.parse_to_asts() {
                 Ok(it) => it,
                 Err(err) => panic!("Couldn't parse ASTs of test.mehl: {}", err),
             }
         };
         println!("Test parsed.");
 
-        println!("Code: {}", ast::format_code(&user_code));
+        println!("Code: {}", &user_code);
 
         let mut hir = user_code.compile_to_hir();
         println!("HIR: {}", hir);
