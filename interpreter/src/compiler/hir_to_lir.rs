@@ -2,34 +2,36 @@ use super::hir;
 use super::lir::*;
 use std::collections::HashSet;
 
-pub fn compile(code: &hir::Code) -> Closure {
-    Closure {
-        captured: {
-            let mut used = HashSet::new();
-            for (_, statement) in code.iter() {
-                statement.collect_used_ids(&mut used);
-            }
-            used
-        },
-        in_: code.in_,
-        out: code.out,
-        code: {
-            let mut statements = code
-                .iter()
-                .flat_map(|(id, statement)| statement.compile(id))
-                .collect::<Vec<_>>();
-            let mut ids_to_drop = HashSet::new();
-            for statement in &statements {
-                if let Statement::Assignment { id, .. } = statement {
-                    ids_to_drop.insert(*id);
+impl hir::Code {
+    pub fn compile_to_lir(&self) -> Closure {
+        Closure {
+            captured: {
+                let mut used = HashSet::new();
+                for (_, statement) in self.iter() {
+                    statement.collect_used_ids(&mut used);
                 }
-            }
-            ids_to_drop.remove(&code.out);
-            for id in ids_to_drop {
-                statements.push(Statement::Drop(id));
-            }
-            statements
-        },
+                used
+            },
+            in_: self.in_,
+            out: self.out,
+            code: {
+                let mut statements = self
+                    .iter()
+                    .flat_map(|(id, statement)| statement.compile(id))
+                    .collect::<Vec<_>>();
+                let mut ids_to_drop = HashSet::new();
+                for statement in &statements {
+                    if let Statement::Assignment { id, .. } = statement {
+                        ids_to_drop.insert(*id);
+                    }
+                }
+                ids_to_drop.remove(&self.out);
+                for id in ids_to_drop {
+                    statements.push(Statement::Drop(id));
+                }
+                statements
+            },
+        }
     }
 }
 
@@ -72,7 +74,7 @@ impl hir::Statement {
                 statements
             }
             hir::Statement::Code(code) => {
-                let closure = compile(code);
+                let closure = code.compile_to_lir();
                 let mut statements = vec![];
                 for captured_var in &closure.captured {
                     statements.push(Statement::Dup(*captured_var));

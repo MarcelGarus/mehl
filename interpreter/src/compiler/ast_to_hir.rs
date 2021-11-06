@@ -2,14 +2,19 @@ use super::hir::*;
 use crate::ast::{Ast, Asts};
 use std::collections::HashMap;
 
-pub fn compile(asts: Asts) -> Code {
-    let mut compiler = Compiler {
-        code: Code::new(0, 0),
-        funs: HashMap::new(),
-    };
-    let dot = compiler.push(Statement::unit());
-    compiler.compile(dot, asts);
-    compiler.code
+pub trait CompileAsts {
+    fn compile_to_hir(self) -> Code;
+}
+impl CompileAsts for Asts {
+    fn compile_to_hir(self) -> Code {
+        let mut compiler = Compiler {
+            code: Code::new(0, 0),
+            funs: HashMap::new(),
+        };
+        let dot = compiler.push(Statement::unit());
+        compiler.compile(dot, self);
+        compiler.code
+    }
 }
 
 struct Compiler {

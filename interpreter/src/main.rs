@@ -11,6 +11,8 @@ use lspower::lsp::*;
 use lspower::{Client, LanguageServer, LspService, Server};
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
+use crate::compiler::ast_to_hir::CompileAsts;
+
 #[tokio::main]
 async fn main() {
     TermLogger::init(
@@ -31,7 +33,7 @@ async fn main() {
 
     if let Some(_) = matches.subcommand_matches("run") {
         println!("Running test.mehl.");
-        let core = {
+        let _core_code = {
             let code = std::fs::read_to_string("core.mehl").expect("File core.mehl not found.");
             match ast::Ast::parse_all(&code) {
                 Ok(it) => it,
@@ -39,7 +41,7 @@ async fn main() {
             }
         };
         println!("Core parsed.");
-        let user = {
+        let user_code = {
             let code = std::fs::read_to_string("test.mehl").expect("File test.mehl not found.");
             match ast::Ast::parse_all(&code) {
                 Ok(it) => it,
@@ -48,15 +50,15 @@ async fn main() {
         };
         println!("Test parsed.");
 
-        println!("Code: {}", ast::format_code(&user));
+        println!("Code: {}", ast::format_code(&user_code));
 
-        let mut code = ast_to_hir::compile(user);
-        println!("HIR: {}", code);
+        let mut hir = user_code.compile_to_hir();
+        println!("HIR: {}", hir);
         println!("Optimizing...");
-        code.optimize();
-        println!("Optimized HIR: {}", code);
-        let code = hir_to_lir::compile(&code);
-        println!("LIR: {}", code);
+        hir.optimize();
+        println!("Optimized HIR: {}", hir);
+        let lir = hir.compile_to_lir();
+        println!("LIR: {}", lir);
 
         // let mut fiber = runner::Runtime::default();
         // let context = runner::Context::root(&mut fiber);
