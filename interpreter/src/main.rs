@@ -1,5 +1,6 @@
 mod compiler;
 mod runner;
+mod vm;
 
 use clap::{App, SubCommand};
 use colored::Colorize;
@@ -8,6 +9,8 @@ use lspower::jsonrpc::Result;
 use lspower::lsp::*;
 use lspower::{Client, LanguageServer, LspService, Server};
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
+
+use crate::vm::Vm;
 
 #[tokio::main]
 async fn main() {
@@ -58,6 +61,12 @@ async fn main() {
         println!("Compiling to byte code...");
         let byte_code = lir.compile_to_byte_code();
         println!("Byte code: {:?}", byte_code);
+
+        println!("Running in VM...");
+        let mut vm = Vm::new(byte_code);
+        vm.run();
+        println!("{}", "Done running.".green(),);
+        println!("{:?}", vm);
 
         // let mut fiber = runner::Runtime::default();
         // let context = runner::Context::root(&mut fiber);

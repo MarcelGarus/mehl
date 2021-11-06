@@ -1,8 +1,5 @@
 pub use super::hir::Id;
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-};
+use std::{collections::HashMap, fmt};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Statement {

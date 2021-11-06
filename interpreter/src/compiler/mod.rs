@@ -1,6 +1,6 @@
 mod ast;
 mod ast_to_hir;
-mod byte_code;
+pub mod byte_code;
 mod hir;
 mod hir_to_lir;
 mod lir;
