@@ -29,7 +29,7 @@ pub enum Expr {
 }
 #[derive(Clone, PartialEq, Eq)]
 pub struct Closure {
-    pub captured: HashSet<Id>,
+    pub captured: Vec<Id>, // sorted
     pub code: Vec<Statement>,
     pub in_: Id,
     pub out: Id,

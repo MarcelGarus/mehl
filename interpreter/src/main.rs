@@ -55,6 +55,9 @@ async fn main() {
         println!("Optimized HIR: {}", hir);
         let lir = hir.compile_to_lir();
         println!("LIR: {}", lir);
+        println!("Compiling to byte code...");
+        let byte_code = lir.compile_to_byte_code();
+        println!("Byte code: {:?}", byte_code);
 
         // let mut fiber = runner::Runtime::default();
         // let context = runner::Context::root(&mut fiber);

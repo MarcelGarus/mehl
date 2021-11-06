@@ -1,8 +1,10 @@
 mod ast;
 mod ast_to_hir;
+mod byte_code;
 mod hir;
 mod hir_to_lir;
 mod lir;
+mod lir_to_byte_code;
 mod optimize_hir;
 mod string_to_ast;
 

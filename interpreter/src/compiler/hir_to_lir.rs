@@ -10,6 +10,8 @@ impl hir::Code {
                 for (_, statement) in self.iter() {
                     statement.collect_used_ids(&mut used);
                 }
+                let mut used = used.into_iter().collect::<Vec<_>>();
+                used.sort();
                 used
             },
             in_: self.in_,
