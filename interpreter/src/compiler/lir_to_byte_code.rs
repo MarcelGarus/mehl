@@ -16,7 +16,7 @@ impl lir::Closure {
         for statement in &self.code {
             statement.compile(out, &mut stack);
         }
-        out.push_instruction(Instruction::PushFromStack(stack.reference_id(self.out)));
+        out.push_instruction(push_from_stack_instruction(stack.reference_id(self.out)));
         out.push_instruction(Instruction::PopMultipleBelowTop(
             stack.len().try_into().unwrap(),
         ));
@@ -33,7 +33,11 @@ impl lir::Statement {
                     stack.push(*id);
                 }
                 lir::Expr::String(string) => {
-                    out.push_instruction(CreateString(string.clone()));
+                    out.push_instruction(if string.len() < 256 {
+                        CreateSmallString(string.clone())
+                    } else {
+                        CreateString(string.clone())
+                    });
                     stack.push(*id);
                 }
                 lir::Expr::Symbol(symbol) => {
@@ -49,34 +53,38 @@ impl lir::Statement {
                     out.update_jump_target(jump_addr, after_body_addr);
                     out.push_instruction(PushAddress(body_addr));
                     for id in &closure.captured {
-                        out.push_instruction(PushFromStack(stack.reference_id(*id)));
+                        out.push_instruction(push_from_stack_instruction(stack.reference_id(*id)));
                     }
                     out.push_instruction(CreateClosure(closure.captured.len() as u64));
                     stack.push(*id);
                 }
                 lir::Expr::Map(map) => {
                     for (key, value) in map {
-                        out.push_instruction(PushFromStack(stack.reference_id(*key)));
-                        out.push_instruction(PushFromStack(stack.reference_id(*value)));
+                        out.push_instruction(push_from_stack_instruction(stack.reference_id(*key)));
+                        out.push_instruction(push_from_stack_instruction(
+                            stack.reference_id(*value),
+                        ));
                     }
                     out.push_instruction(CreateMap(map.len() as u64));
                     stack.push(*id);
                 }
                 lir::Expr::List(list) => {
                     for item in list {
-                        out.push_instruction(PushFromStack(stack.reference_id(*item)));
+                        out.push_instruction(push_from_stack_instruction(
+                            stack.reference_id(*item),
+                        ));
                     }
                     out.push_instruction(CreateList(list.len() as u64));
                     stack.push(*id);
                 }
                 lir::Expr::Call { closure, arg } => {
-                    out.push_instruction(PushFromStack(stack.reference_id(*closure)));
-                    out.push_instruction(PushFromStack(stack.reference_id(*arg)));
+                    out.push_instruction(push_from_stack_instruction(stack.reference_id(*closure)));
+                    out.push_instruction(push_from_stack_instruction(stack.reference_id(*arg)));
                     out.push_instruction(Call);
                     stack.push(*id);
                 }
                 lir::Expr::Primitive { kind, arg } => {
-                    out.push_instruction(PushFromStack(stack.reference_id(*arg)));
+                    out.push_instruction(push_from_stack_instruction(stack.reference_id(*arg)));
                     use super::hir::Primitive::*;
                     out.push_instruction(match *kind {
                         Magic => Instruction::Primitive,
@@ -86,9 +94,35 @@ impl lir::Statement {
                     stack.push(*id);
                 }
             },
-            lir::Statement::Dup(id) => out.push_instruction(Dup(stack.reference_id(*id))),
-            lir::Statement::Drop(id) => out.push_instruction(Drop(stack.reference_id(*id))),
+            lir::Statement::Dup(id) => {
+                out.push_instruction(dup_instruction(stack.reference_id(*id)))
+            }
+            lir::Statement::Drop(id) => {
+                out.push_instruction(drop_instruction(stack.reference_id(*id)))
+            }
         }
+    }
+}
+
+fn dup_instruction(offset: StackOffset) -> Instruction {
+    if offset < 256 {
+        Instruction::DupNear(offset as u8)
+    } else {
+        Instruction::Dup(offset)
+    }
+}
+fn drop_instruction(offset: StackOffset) -> Instruction {
+    if offset < 256 {
+        Instruction::DropNear(offset as u8)
+    } else {
+        Instruction::Drop(offset)
+    }
+}
+fn push_from_stack_instruction(offset: StackOffset) -> Instruction {
+    if offset < 256 {
+        Instruction::PushNearFromStack(offset as u8)
+    } else {
+        Instruction::PushFromStack(offset)
     }
 }
 
@@ -125,6 +159,13 @@ impl ByteCodeExt for ByteCode {
                     self.push_u8(byte);
                 }
             }
+            CreateSmallString(string) => {
+                self.push_u8(17);
+                self.push_u8(string.len() as u8);
+                for byte in string.bytes() {
+                    self.push_u8(byte);
+                }
+            }
             CreateSymbol(symbol) => {
                 self.push_u8(2);
                 for byte in symbol.bytes() {
@@ -148,9 +189,17 @@ impl ByteCodeExt for ByteCode {
                 self.push_u8(6);
                 self.push_u64(offset);
             }
+            DupNear(offset) => {
+                self.push_u8(18);
+                self.push_u8(offset);
+            }
             Drop(offset) => {
                 self.push_u8(7);
                 self.push_u64(offset);
+            }
+            DropNear(offset) => {
+                self.push_u8(19);
+                self.push_u8(offset);
             }
             Pop => self.push_u8(8),
             PopMultipleBelowTop(num) => {
@@ -164,6 +213,10 @@ impl ByteCodeExt for ByteCode {
             PushFromStack(offset) => {
                 self.push_u8(11);
                 self.push_u64(offset);
+            }
+            PushNearFromStack(offset) => {
+                self.push_u8(20);
+                self.push_u8(offset);
             }
             Jump(addr) => {
                 self.push_u8(12);

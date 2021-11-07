@@ -73,6 +73,10 @@ impl Vm {
                 let address = self.create_object(ObjectData::String(string));
                 self.stack.push(StackEntry::AddressInHeap(address));
             }
+            Instruction::CreateSmallString(string) => {
+                let address = self.create_object(ObjectData::String(string));
+                self.stack.push(StackEntry::AddressInHeap(address));
+            }
             Instruction::CreateSymbol(symbol) => {
                 let address = self.create_object(ObjectData::Symbol(symbol));
                 self.stack.push(StackEntry::AddressInHeap(address));
@@ -141,8 +145,22 @@ impl Vm {
                 };
                 self.heap.get_mut(&address).unwrap().reference_count += 1;
             }
+            Instruction::DupNear(stack_offset) => {
+                let address = match self.get_from_stack(stack_offset as StackOffset) {
+                    StackEntry::AddressInByteCode(_) => panic!(),
+                    StackEntry::AddressInHeap(address) => address,
+                };
+                self.heap.get_mut(&address).unwrap().reference_count += 1;
+            }
             Instruction::Drop(stack_offset) => {
                 let address = match self.get_from_stack(stack_offset) {
+                    StackEntry::AddressInByteCode(_) => panic!(),
+                    StackEntry::AddressInHeap(address) => address,
+                };
+                self.drop(address);
+            }
+            Instruction::DropNear(stack_offset) => {
+                let address = match self.get_from_stack(stack_offset as StackOffset) {
                     StackEntry::AddressInByteCode(_) => panic!(),
                     StackEntry::AddressInHeap(address) => address,
                 };
@@ -163,6 +181,10 @@ impl Vm {
             }
             Instruction::PushFromStack(offset) => {
                 let entry = self.get_from_stack(offset);
+                self.stack.push(entry)
+            }
+            Instruction::PushNearFromStack(offset) => {
+                let entry = self.get_from_stack(offset as StackOffset);
                 self.stack.push(entry)
             }
             Instruction::Jump(address) => self.ip = address,

@@ -8,26 +8,31 @@ pub type Address = u64;
 
 /// A relative reference to a stack entry.
 pub type StackOffset = u64;
+pub type NearStackOffset = u8;
 
 #[derive(Debug)]
 pub enum Instruction {
     // Creation of literal objects.
-    CreateInt(i64),
-    CreateString(String),
-    CreateSymbol(String),
-    CreateMap(u64),     // key | value | ... | key | value | CreateMap(len)
-    CreateList(u64),    // item | item | ... | item | CreateList(len)
+    CreateInt(i64),            // Creates an Int.
+    CreateString(String),      // Creates a String.
+    CreateSmallString(String), // Creates a String that is at most 255 characters long.
+    CreateSymbol(String),      // Creates a Symbol.
+    CreateMap(u64),            // key | value | ... | key | value | CreateMap(len)
+    CreateList(u64),           // item | item | ... | item | CreateList(len)
     CreateClosure(u64), // ip | captured_var | ... | captured_var | CreateClosure(num_captured_vars)
 
     // Reference counting.
-    Dup(StackOffset),  // Increases the refcount of the object by one.
-    Drop(StackOffset), // Decreases the refcount of the object by one and frees it on 0.
+    Dup(StackOffset),          // Increases the refcount of the object by one.
+    DupNear(NearStackOffset),  // Like `Dup`.
+    Drop(StackOffset),         // Decreases the refcount of the object by one and frees it on 0.
+    DropNear(NearStackOffset), // Like `Drop`.
 
     // Stack manipulation.
-    Pop,                        // Pops a stack value.
-    PopMultipleBelowTop(u8),    // Leaves the top-most stack item untouched, but removes n below.
-    PushAddress(Address),       // Pushes an address that points into the bytecode.
+    Pop,                                // Pops a stack value.
+    PopMultipleBelowTop(u8), // Leaves the top-most stack item untouched, but removes n below.
+    PushAddress(Address),    // Pushes an address that points into the bytecode.
     PushFromStack(StackOffset), // Pushes a value from back in the stack on the stack again.
+    PushNearFromStack(NearStackOffset), // Like `PushFromStack`.
 
     // Control flow.
     Jump(Address),
@@ -71,6 +76,13 @@ impl<'a> Parser<'a> {
                 self.0 = &self.0[len as usize..];
                 CreateString(string)
             }
+            17 => {
+                let len = self.get_u8();
+                let string =
+                    String::from_utf8(self.0[..len as usize].to_vec()).expect("Invalid UTF8.");
+                self.0 = &self.0[len as usize..];
+                CreateSmallString(string)
+            }
             2 => {
                 let mut bytes = vec![];
                 loop {
@@ -86,11 +98,14 @@ impl<'a> Parser<'a> {
             4 => CreateList(self.get_u64()),
             5 => CreateClosure(self.get_u64()),
             6 => Dup(self.get_u64()),
+            18 => DupNear(self.get_u8()),
             7 => Drop(self.get_u64()),
+            19 => DropNear(self.get_u8()),
             8 => Pop,
             9 => PopMultipleBelowTop(self.get_u8()),
             10 => PushAddress(self.get_u64()),
             11 => PushFromStack(self.get_u64()),
+            20 => PushNearFromStack(self.get_u8()),
             12 => Jump(self.get_u64()),
             13 => Call,
             14 => Return,

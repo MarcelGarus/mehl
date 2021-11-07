@@ -132,7 +132,6 @@
 
 ### Todo
 
-# - more compact byte code
 # - bignums
 # - more primitives
 #  - =, !=
