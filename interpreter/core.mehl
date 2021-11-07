@@ -132,28 +132,40 @@
 
 ### Todo
 
-# - =
-# - bignum
-# - pow
-# - use Rc
-# - maps
-# - lists
-# - strings
-# - maybe
-# - output
-# - input
-# - iterate
-# - random
-# - units
-# - memory management
+# - more compact byte code
+# - bignums
+# - more primitives
+#  - =, !=
+#  - panic
+#  - Int.+, Int.-, Int.*, Int./, Int.mod, Int.pow, Int.neg, Int.>, Int.>=, Int.<, Int.<=
+#  - String.bytes, String.chars
+#  - Map.get, Map.insert, Map.join, Map.keys
+#  - List.get, List.len
+#  - Ambient.get, Ambient.set
+#  - Fiber.new, Fiber.run, Fiber.spawn, Fiber.kill, Fiber.set-priority
+#  - wait
+#  - Channel.send, Channel.receive
 # - fibers
-# - http get
-# - FFI
+# - better Core library
+#  - Bool: Bool.not, Bool.&, Bool.|, Bool.=>
+#  - Maybe: Maybe.unwrap, Maybe.map
+#  - Result: Result.unwrap, Result.map, Result.map-error
+#  - Iter: Iter.next
+#  - Units: seconds, meters, milli, micro, kilo, mega, giga, tera, peta, kibi, mibi, gibi, tibi, pibi
+#  - Test
+# - support including modules
+# - in the VM, use actual pointers instead of a HashMap
+# - make stack entries more compact
+# - optimize LIR
+# - string interpolation
+# - sets
+# - merging of maps
+# - side-effect-ful
+#  - Stdout
+#  - Stdin
+#  - Http.get
+#  - Random
 # - wrong-usage
-# - propagate-wrong-usage
-# - channels
-# - ambients
-# - testing
 # - LSP
 # - Automatic property-based testing
 
