@@ -400,11 +400,12 @@ impl Fiber {
                     }
                 };
 
-                let object = match kind {
+                let value = match kind {
                     PrimitiveKind::Add => self.primitive_add(arg),
+                    PrimitiveKind::GetAmbient => self.primitive_get_ambient(arg),
                     PrimitiveKind::Print => self.primitive_print(arg),
                 };
-                let address = self.create_object(object);
+                let address = self.import(value);
                 self.stack.push(StackEntry::AddressInHeap(address));
             }
         }
@@ -412,7 +413,7 @@ impl Fiber {
 
     // Primitives.
 
-    fn primitive_add(&mut self, arg: Value) -> ObjectData {
+    fn primitive_add(&mut self, arg: Value) -> Value {
         let list = match arg {
             Value::List(list) => list,
             _ => panic!("Add called with something that is not a list."),
@@ -428,11 +429,19 @@ impl Fiber {
             Value::Int(b) => b,
             _ => panic!("Add called with a list that contains something other than numbers."),
         };
-        ObjectData::Int(a + b)
+        Value::Int(a + b)
     }
 
-    fn primitive_print(&mut self, arg: Value) -> ObjectData {
+    fn primitive_get_ambient(&mut self, arg: Value) -> Value {
+        let symbol = match arg {
+            Value::Symbol(symbol) => symbol,
+            _ => panic!("GetAmbient called with a non-symbol."),
+        };
+        (*self.ambients.get(&symbol).expect("Ambient doesnt exist.")).clone()
+    }
+
+    fn primitive_print(&mut self, arg: Value) -> Value {
         println!("🌮> {:?}", arg);
-        ObjectData::Symbol(":".into())
+        Value::Symbol("".into())
     }
 }

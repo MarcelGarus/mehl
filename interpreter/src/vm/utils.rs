@@ -4,7 +4,7 @@ use std::collections::HashMap;
 pub type Pointer = u64;
 pub type ChannelId = u64;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value {
     Int(i64),
     String(String),
