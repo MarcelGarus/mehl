@@ -15,8 +15,10 @@ impl lir::Closure {
 
     fn compile_body(&self, out: &mut ByteCode) {
         let mut stack = self.captured.clone();
+        println!("Compiling body. Captured: {:?}", self.captured);
         stack.push(self.in_);
         for statement in &self.code {
+            println!("Stack is {:?}.", stack);
             statement.compile(out, &mut stack);
         }
         out.push_instruction(push_from_stack_instruction(stack.reference_id(self.out)));
@@ -106,6 +108,7 @@ impl lir::Statement {
                 }
                 lir::Expr::Primitive { kind, arg } => {
                     out.push_instruction(push_from_stack_instruction(stack.reference_id(*arg)));
+                    stack.push(*arg);
                     out.push_instruction(Instruction::Primitive(*kind));
                     stack.remove_last();
                     stack.push(*id);
@@ -164,6 +167,7 @@ impl ByteCodeExt for ByteCode {
     }
     fn push_instruction(&mut self, instruction: Instruction) {
         use Instruction::*;
+        println!("Pushing instruction {:?}", instruction);
         match instruction {
             CreateInt(int) => {
                 self.push_u8(0);
