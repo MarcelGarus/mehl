@@ -1,7 +1,7 @@
 use super::utils::*;
 use crate::compiler::byte_code::{Address, ByteCode, Instruction, StackOffset};
 use crate::compiler::PrimitiveKind;
-use crate::utils::{self, DestructureTuple};
+use crate::utils::*;
 use itertools::Itertools;
 use std::collections::HashMap;
 
@@ -19,7 +19,7 @@ pub struct Fiber {
     next_heap_address: u64,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum FiberStatus {
     Running,
     Done(Value),
@@ -67,6 +67,10 @@ impl Fiber {
             heap: HashMap::new(),
             next_heap_address: 123450000,
         }
+    }
+
+    pub fn status(&self) -> FiberStatus {
+        self.status.clone()
     }
 
     fn get_from_stack(&self, offset: StackOffset) -> StackEntry {
@@ -209,7 +213,7 @@ impl Fiber {
             let (instruction, num_bytes_consumed) =
                 Instruction::parse(&self.byte_code[self.ip as usize..])
                     .expect("Couldn't parse instruction.");
-            println!("VM: {:?}\nNext instruction: {:?}", &self, &instruction);
+            println!("Next instruction: {:?}", &instruction);
             self.run_instruction(instruction);
 
             self.ip += num_bytes_consumed as u64;
@@ -401,12 +405,18 @@ impl Fiber {
                 };
 
                 let value = match kind {
-                    PrimitiveKind::Add => self.primitive_add(arg),
-                    PrimitiveKind::GetAmbient => self.primitive_get_ambient(arg),
-                    PrimitiveKind::Print => self.primitive_print(arg),
+                    PrimitiveKind::Add => Some(self.primitive_add(arg)),
+                    PrimitiveKind::GetAmbient => Some(self.primitive_get_ambient(arg)),
+                    PrimitiveKind::Send => {
+                        self.primitive_send(arg);
+                        None
+                    }
+                    PrimitiveKind::Print => Some(self.primitive_print(arg)),
                 };
-                let address = self.import(value);
-                self.stack.push(StackEntry::AddressInHeap(address));
+                if let Some(value) = value {
+                    let address = self.import(value);
+                    self.stack.push(StackEntry::AddressInHeap(address));
+                }
             }
         }
     }
@@ -440,8 +450,31 @@ impl Fiber {
         (*self.ambients.get(&symbol).expect("Ambient doesnt exist.")).clone()
     }
 
+    fn primitive_send(&mut self, arg: Value) {
+        let list = match arg {
+            Value::List(list) => list,
+            _ => panic!("Send called with something that is not a list."),
+        };
+        let (channel_end, message) = list
+            .tuple2()
+            .expect("Send called with a list that has a different number than 2 elements.");
+        let channel_end = match channel_end {
+            Value::ChannelSendEnd(channel_end) => channel_end,
+            _ => panic!("Send called with a list where the first item is not a ChannelSendEnd."),
+        };
+        self.status = FiberStatus::Sending(channel_end, message);
+    }
+
     fn primitive_print(&mut self, arg: Value) -> Value {
         println!("🌮> {:?}", arg);
         Value::Symbol("".into())
+    }
+
+    // Resolve status.
+
+    pub fn resolve_sending(&mut self) {
+        let address = self.import(Value::Symbol("".into()));
+        self.stack.push(StackEntry::AddressInHeap(address));
+        self.status = FiberStatus::Running;
     }
 }

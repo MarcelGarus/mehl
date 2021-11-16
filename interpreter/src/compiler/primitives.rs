@@ -2,6 +2,7 @@
 pub enum PrimitiveKind {
     Add,
     GetAmbient,
+    Send,
     Print,
 }
 
@@ -10,6 +11,7 @@ impl PrimitiveKind {
         Some(match symbol {
             "add" => Self::Add,
             "get-ambient" => Self::GetAmbient,
+            "send" => Self::Send,
             "print" => Self::Print,
             _ => return None,
         })
@@ -19,6 +21,7 @@ impl PrimitiveKind {
         match self {
             Self::Add => true,
             Self::GetAmbient => false,
+            Self::Send => false,
             Self::Print => false,
         }
     }

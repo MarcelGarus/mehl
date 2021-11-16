@@ -13,7 +13,7 @@ use lspower::lsp::*;
 use lspower::{Client, LanguageServer, LspService, Server};
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
-use crate::vm::{Fiber, Value, Vm};
+use crate::vm::{Fiber, FiberStatus, Value, Vm};
 
 #[tokio::main]
 async fn main() {
@@ -69,9 +69,25 @@ async fn main() {
         let mut ambients = HashMap::new();
         ambients.insert("stdout".into(), Value::ChannelSendEnd(0));
         let mut fiber = Fiber::new(byte_code, ambients);
+        loop {
+            fiber.run(30);
+            match fiber.status() {
+                FiberStatus::Running => {}
+                FiberStatus::Done(value) => {
+                    println!("{}", format!("Done running: {:?}", value).green());
+                    break;
+                }
+                FiberStatus::Sending(channel_id, message) => {
+                    match channel_id {
+                        0 => println!("{}", format!("🌮> {:?}", message).yellow()),
+                        _ => panic!("Unknown channel id {}.", channel_id),
+                    }
+                    fiber.resolve_sending();
+                }
+                FiberStatus::Receiving(channel_id) => todo!(),
+            }
+        }
         // let mut vm = Vm::new(byte_code);
-        fiber.run(30);
-        println!("{}", "Done running.".green(),);
         println!("{:?}", fiber);
 
         // let mut fiber = runner::Runtime::default();
