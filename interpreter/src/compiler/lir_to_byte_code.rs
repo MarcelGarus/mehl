@@ -1,6 +1,9 @@
+use crate::utils::RemoveLast;
+
 use super::byte_code::*;
 use super::lir;
 use super::lir::Id;
+use super::primitives::PrimitiveKind;
 use std::convert::TryInto;
 
 impl lir::Closure {
@@ -20,6 +23,8 @@ impl lir::Closure {
         out.push_instruction(Instruction::PopMultipleBelowTop(
             stack.len().try_into().unwrap(),
         ));
+        stack.clear();
+        stack.push(self.out);
     }
 }
 
@@ -52,8 +57,10 @@ impl lir::Statement {
                     let after_body_addr = out.current_address();
                     out.update_jump_target(jump_addr, after_body_addr);
                     out.push_instruction(PushAddress(body_addr));
+                    stack.push(0);
                     for id in &closure.captured {
                         out.push_instruction(push_from_stack_instruction(stack.reference_id(*id)));
+                        stack.push(*id);
                     }
                     out.push_instruction(CreateClosure(closure.captured.len() as u64));
                     stack.push(*id);
@@ -61,11 +68,17 @@ impl lir::Statement {
                 lir::Expr::Map(map) => {
                     for (key, value) in map {
                         out.push_instruction(push_from_stack_instruction(stack.reference_id(*key)));
+                        stack.push(*key);
                         out.push_instruction(push_from_stack_instruction(
                             stack.reference_id(*value),
                         ));
+                        stack.push(*value);
                     }
                     out.push_instruction(CreateMap(map.len() as u64));
+                    for _ in map {
+                        stack.remove_last();
+                        stack.remove_last();
+                    }
                     stack.push(*id);
                 }
                 lir::Expr::List(list) => {
@@ -73,24 +86,28 @@ impl lir::Statement {
                         out.push_instruction(push_from_stack_instruction(
                             stack.reference_id(*item),
                         ));
+                        stack.push(*item);
                     }
                     out.push_instruction(CreateList(list.len() as u64));
+                    for _ in list {
+                        stack.remove_last();
+                    }
                     stack.push(*id);
                 }
                 lir::Expr::Call { closure, arg } => {
                     out.push_instruction(push_from_stack_instruction(stack.reference_id(*closure)));
+                    stack.push(*closure);
                     out.push_instruction(push_from_stack_instruction(stack.reference_id(*arg)));
+                    stack.push(*arg);
                     out.push_instruction(Call);
+                    stack.remove_last();
+                    stack.remove_last();
                     stack.push(*id);
                 }
                 lir::Expr::Primitive { kind, arg } => {
                     out.push_instruction(push_from_stack_instruction(stack.reference_id(*arg)));
-                    use super::hir::Primitive::*;
-                    out.push_instruction(match *kind {
-                        Magic => Instruction::Primitive,
-                        Print => Instruction::PrimitivePrint,
-                        _ => panic!("Unknown primitive {:?}.", kind),
-                    });
+                    out.push_instruction(Instruction::Primitive(*kind));
+                    stack.remove_last();
                     stack.push(*id);
                 }
             },
@@ -224,8 +241,9 @@ impl ByteCodeExt for ByteCode {
             }
             Call => self.push_u8(13),
             Return => self.push_u8(14),
-            Primitive => self.push_u8(15),
-            PrimitivePrint => self.push_u8(16),
+            Primitive(None) => self.push_u8(15),
+            Primitive(Some(PrimitiveKind::Add)) => self.push_u8(21),
+            Primitive(Some(PrimitiveKind::Print)) => self.push_u8(16),
         }
     }
     fn update_jump_target(&mut self, jump_address: Address, target: Address) {

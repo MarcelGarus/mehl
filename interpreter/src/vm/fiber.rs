@@ -1,18 +1,30 @@
+use super::utils::*;
+use crate::compiler::byte_code::{Address, ByteCode, Instruction, StackOffset};
+use crate::compiler::PrimitiveKind;
+use crate::utils::{self, DestructureTuple};
+use itertools::Itertools;
 use std::collections::HashMap;
 
-use itertools::Itertools;
-
-use crate::compiler::byte_code::{ByteCode, Instruction, StackOffset};
-
-type Pointer = u64;
-
+/// A fiber can execute some byte code. It's "single-threaded", a pure
+/// mathematical machine and only communicates with the outside world through
+/// channels, which can be provided during instantiation as ambients.
 #[derive(Debug)]
-pub struct Vm {
+pub struct Fiber {
     byte_code: ByteCode,
+    ambients: HashMap<String, Value>,
+    status: FiberStatus,
     ip: Pointer, // instruction pointer
     stack: Vec<StackEntry>,
     heap: HashMap<Pointer, Object>, // TODO: dynamically allocate objects
     next_heap_address: u64,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum FiberStatus {
+    Running,
+    Done(Value),
+    Sending(ChannelId, Value),
+    Receiving(ChannelId),
 }
 
 // TODO: Unify both cases and inline some values. The size of the stack is very
@@ -20,11 +32,11 @@ pub struct Vm {
 // nice.
 #[derive(Debug, Clone)]
 enum StackEntry {
-    AddressInByteCode(Pointer),
+    AddressInByteCode(Address),
     AddressInHeap(Pointer),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)] // TODO: rm Clone
 pub struct Object {
     reference_count: u64,
     data: ObjectData,
@@ -38,14 +50,18 @@ pub enum ObjectData {
     List(Vec<Pointer>),
     Closure {
         captured: Vec<Pointer>,
-        body: Pointer,
+        body: Address,
     },
+    ChannelSendEnd(ChannelId),
+    ChannelReceiveEnd(ChannelId),
 }
 
-impl Vm {
-    pub fn new(byte_code: ByteCode) -> Self {
+impl Fiber {
+    pub fn new(byte_code: ByteCode, ambients: HashMap<String, Value>) -> Self {
         Self {
             byte_code,
+            ambients,
+            status: FiberStatus::Running,
             ip: 0,
             stack: vec![],
             heap: HashMap::new(),
@@ -53,17 +69,159 @@ impl Vm {
         }
     }
 
-    pub fn run(&mut self) {
-        while self.ip < self.byte_code.len() as u64 {
+    fn get_from_stack(&self, offset: StackOffset) -> StackEntry {
+        self.stack[self.stack.len() - (offset as usize) - 1].clone()
+    }
+    fn get_from_heap(&mut self, address: Pointer) -> &mut Object {
+        self.heap.get_mut(&address).unwrap()
+    }
+
+    fn create_object(&mut self, object: ObjectData) -> Pointer {
+        let address = self.next_heap_address;
+        self.heap.insert(
+            address,
+            Object {
+                reference_count: 1,
+                data: object,
+            },
+        );
+        self.next_heap_address += 1;
+        address
+    }
+    fn free_object(&mut self, address: Pointer) {
+        self.heap.remove(&address);
+    }
+
+    fn dup(&mut self, address: Pointer) {
+        let object = self.get_from_heap(address);
+        object.reference_count += 1;
+    }
+    fn drop(&mut self, address: Pointer) {
+        let object = self.get_from_heap(address);
+        object.reference_count -= 1;
+        let object = object.clone();
+        if object.reference_count == 0 {
+            match &object.data {
+                ObjectData::Int(_) | ObjectData::String(_) | ObjectData::Symbol(_) => {}
+                ObjectData::Map(map) => {
+                    for (key, value) in map {
+                        self.drop(*key);
+                        self.drop(*value);
+                    }
+                }
+                ObjectData::List(list) => {
+                    for item in list {
+                        self.drop(*item);
+                    }
+                }
+                ObjectData::Closure { captured, .. } => {
+                    for object in captured {
+                        self.drop(*object);
+                    }
+                }
+                ObjectData::ChannelSendEnd(_) | ObjectData::ChannelReceiveEnd(_) => {}
+            }
+            self.free_object(address);
+        }
+    }
+
+    fn import(&mut self, value: Value) -> Pointer {
+        let data = match value {
+            Value::Int(int) => ObjectData::Int(int),
+            Value::String(string) => ObjectData::String(string),
+            Value::Symbol(symbol) => ObjectData::Symbol(symbol),
+            Value::Map(map) => {
+                let mut map_data = HashMap::new();
+                for (key, value) in map {
+                    map_data.insert(self.import(key), self.import(value));
+                }
+                ObjectData::Map(map_data)
+            }
+            Value::List(list) => {
+                let mut list_data = vec![];
+                for item in list {
+                    list_data.push(self.import(item));
+                }
+                ObjectData::List(list_data)
+            }
+            Value::Closure { captured, body } => {
+                let mut captured_objects = vec![];
+                for value in captured {
+                    captured_objects.push(self.import(value));
+                }
+                ObjectData::Closure {
+                    captured: captured_objects,
+                    body,
+                }
+            }
+            Value::ChannelSendEnd(channel_id) => ObjectData::ChannelSendEnd(channel_id),
+            Value::ChannelReceiveEnd(channel_id) => ObjectData::ChannelReceiveEnd(channel_id),
+        };
+        self.create_object(data)
+    }
+    fn export(&mut self, address: Pointer) -> Value {
+        let value = self.export_helper(address);
+        self.drop(address);
+        value
+    }
+    fn export_helper(&mut self, address: Pointer) -> Value {
+        match self.get_from_heap(address).data.clone() {
+            ObjectData::Int(int) => Value::Int(int),
+            ObjectData::String(string) => Value::String(string),
+            ObjectData::Symbol(symbol) => Value::Symbol(symbol),
+            ObjectData::Map(map) => {
+                let mut map_value = HashMap::new();
+                for (key, value) in map {
+                    map_value.insert(self.export_helper(key), self.export_helper(value));
+                }
+                Value::Map(map_value)
+            }
+            ObjectData::List(list) => {
+                let mut list_value = vec![];
+                for item in list {
+                    list_value.push(self.export_helper(item));
+                }
+                Value::List(list_value)
+            }
+            ObjectData::Closure { captured, body } => {
+                let mut captured_values = vec![];
+                for object in captured {
+                    captured_values.push(self.export_helper(object));
+                }
+                Value::Closure {
+                    captured: captured_values,
+                    body,
+                }
+            }
+            ObjectData::ChannelSendEnd(channel_id) => Value::ChannelSendEnd(channel_id),
+            ObjectData::ChannelReceiveEnd(channel_id) => Value::ChannelReceiveEnd(channel_id),
+        }
+    }
+
+    pub fn run(&mut self, mut num_instructions: u16) {
+        assert_eq!(
+            self.status,
+            FiberStatus::Running,
+            "Called run on Fiber with a status that is not running."
+        );
+        while self.status == FiberStatus::Running && num_instructions > 0 {
+            num_instructions -= 1;
             let (instruction, num_bytes_consumed) =
                 Instruction::parse(&self.byte_code[self.ip as usize..])
                     .expect("Couldn't parse instruction.");
             println!("VM: {:?}\nNext instruction: {:?}", &self, &instruction);
-            self.execute_instruction(instruction);
+            self.run_instruction(instruction);
+
             self.ip += num_bytes_consumed as u64;
+            if self.ip >= self.byte_code.len() as u64 {
+                self.status = FiberStatus::Done(match self.stack.pop().unwrap() {
+                    StackEntry::AddressInByteCode(_) => panic!("Can only return values."),
+                    StackEntry::AddressInHeap(address) => self.export(address),
+                });
+            }
         }
     }
-    fn execute_instruction(&mut self, instruction: Instruction) {
+    fn run_instruction(&mut self, instruction: Instruction) {
         match instruction {
             Instruction::CreateInt(int) => {
                 let address = self.create_object(ObjectData::Int(int));
@@ -143,14 +301,14 @@ impl Vm {
                     StackEntry::AddressInByteCode(_) => panic!(),
                     StackEntry::AddressInHeap(address) => address,
                 };
-                self.heap.get_mut(&address).unwrap().reference_count += 1;
+                self.dup(address);
             }
             Instruction::DupNear(stack_offset) => {
                 let address = match self.get_from_stack(stack_offset as StackOffset) {
                     StackEntry::AddressInByteCode(_) => panic!(),
                     StackEntry::AddressInHeap(address) => address,
                 };
-                self.heap.get_mut(&address).unwrap().reference_count += 1;
+                self.dup(address);
             }
             Instruction::Drop(stack_offset) => {
                 let address = match self.get_from_stack(stack_offset) {
@@ -214,74 +372,67 @@ impl Vm {
                 self.stack.push(return_value);
                 self.ip = original_address;
             }
-            Instruction::Primitive => {
+            Instruction::Primitive(kind) => {
                 let arg = match self.stack.pop().unwrap() {
                     StackEntry::AddressInByteCode(_) => panic!(),
                     StackEntry::AddressInHeap(address) => address,
                 };
-                let list = match self.heap.get(&arg).unwrap().data.clone() {
-                    ObjectData::List(list) => list,
-                    _ => panic!("Primitive called with a non-list."),
+                let arg = self.export(arg);
+                let (kind, arg) = match kind {
+                    Some(kind) => (kind, arg),
+                    None => {
+                        let list = match arg {
+                            Value::List(list) => list,
+                            _ => panic!("Primitive called with a non-list."),
+                        };
+                        let (symbol, arg) = list
+                            .tuple2()
+                            .expect("Primitive called with a list that doesn't contain 2 items.");
+                        let symbol = match symbol {
+                            Value::Symbol(symbol) => symbol,
+                            _ => {
+                                panic!("Primitive called, but the first argument is not a symbol.")
+                            }
+                        };
+                        let kind = PrimitiveKind::parse(&symbol)
+                            .expect(&format!("Unknown primitive {}.", symbol));
+                        (kind, arg)
+                    }
                 };
-                if list.len() != 2 {
-                    panic!(
-                        "Primitive called with a list with {} instead of 2 items.",
-                        list.len()
-                    );
-                }
-                let symbol = match self.heap.get(&list[0]).unwrap().data.clone() {
-                    ObjectData::Symbol(symbol) => symbol,
-                    _ => panic!("Primitive called, but the first argument is not a symbol."),
-                };
-                let arg = list[1];
-                let object = match symbol.as_str() {
-                    "print" => self.primitive_print(arg),
-                    _ => todo!("Unhandled primitive."),
+
+                let object = match kind {
+                    PrimitiveKind::Add => self.primitive_add(arg),
+                    PrimitiveKind::Print => self.primitive_print(arg),
                 };
                 let address = self.create_object(object);
                 self.stack.push(StackEntry::AddressInHeap(address));
             }
-            Instruction::PrimitivePrint => {
-                let address = match self.stack.pop().unwrap() {
-                    StackEntry::AddressInByteCode(_) => panic!(),
-                    StackEntry::AddressInHeap(address) => address,
-                };
-                let object = self.primitive_print(address);
-                let address = self.create_object(object);
-                self.stack.push(StackEntry::AddressInHeap(address));
-            }
-        }
-    }
-
-    fn get_from_stack(&self, offset: StackOffset) -> StackEntry {
-        self.stack[self.stack.len() - (offset as usize) - 1].clone()
-    }
-
-    fn create_object(&mut self, object: ObjectData) -> Pointer {
-        let address = self.next_heap_address;
-        self.heap.insert(
-            address,
-            Object {
-                reference_count: 1,
-                data: object,
-            },
-        );
-        self.next_heap_address += 1;
-        address
-    }
-    fn drop(&mut self, address: Pointer) {
-        let object = self.heap.get_mut(&address).unwrap();
-        object.reference_count -= 1;
-        if object.reference_count == 0 {
-            self.heap.remove(&address); // Free the object.
         }
     }
 
     // Primitives.
-    fn primitive_print(&mut self, address: Pointer) -> ObjectData {
-        let object = self.heap.get(&address).unwrap().data.clone();
-        println!("🌮> {:?}", object);
-        self.drop(address);
+
+    fn primitive_add(&mut self, arg: Value) -> ObjectData {
+        let list = match arg {
+            Value::List(list) => list,
+            _ => panic!("Add called with something that is not a list."),
+        };
+        let (a, b) = list
+            .tuple2()
+            .expect("Add called with a list that has a different number than 2 elements.");
+        let a = match a {
+            Value::Int(a) => a,
+            _ => panic!("Add called with a list that contains something other than numbers."),
+        };
+        let b = match b {
+            Value::Int(b) => b,
+            _ => panic!("Add called with a list that contains something other than numbers."),
+        };
+        ObjectData::Int(a + b)
+    }
+
+    fn primitive_print(&mut self, arg: Value) -> ObjectData {
+        println!("🌮> {:?}", arg);
         ObjectData::Symbol(":".into())
     }
 }

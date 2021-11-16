@@ -1,3 +1,4 @@
+use super::primitives::PrimitiveKind;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -12,14 +13,14 @@ pub enum Statement {
     Map(HashMap<Id, Id>),
     List(Vec<Id>),
     Code(Code),
-    Call { fun: Id, arg: Id },
-    Primitive { kind: Primitive, arg: Id },
-}
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Primitive {
-    Magic, // the exact type is unknown and will be passed as an argument at runtime
-    Add,
-    Print,
+    Call {
+        fun: Id,
+        arg: Id,
+    },
+    Primitive {
+        kind: Option<PrimitiveKind>,
+        arg: Id,
+    },
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]

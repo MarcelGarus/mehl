@@ -67,7 +67,7 @@ impl Compiler {
             Ast::Name(name) => match name.as_str() {
                 "." => dot,
                 "✨" => self.push(Statement::Primitive {
-                    kind: Primitive::Magic,
+                    kind: None,
                     arg: dot,
                 }),
                 name => self.push(Statement::Call {

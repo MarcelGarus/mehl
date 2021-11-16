@@ -1,6 +1,9 @@
 mod compiler;
 mod runner;
+mod utils;
 mod vm;
+
+use std::collections::HashMap;
 
 use clap::{App, SubCommand};
 use colored::Colorize;
@@ -10,7 +13,7 @@ use lspower::lsp::*;
 use lspower::{Client, LanguageServer, LspService, Server};
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
-use crate::vm::Vm;
+use crate::vm::{Fiber, Value, Vm};
 
 #[tokio::main]
 async fn main() {
@@ -63,10 +66,13 @@ async fn main() {
         println!("Byte code: {:?}", byte_code);
 
         println!("Running in VM...");
-        let mut vm = Vm::new(byte_code);
-        vm.run();
+        let mut ambients = HashMap::new();
+        ambients.insert("stdout".into(), Value::ChannelSendEnd(0));
+        let mut fiber = Fiber::new(byte_code, ambients);
+        // let mut vm = Vm::new(byte_code);
+        fiber.run(30);
         println!("{}", "Done running.".green(),);
-        println!("{:?}", vm);
+        println!("{:?}", fiber);
 
         // let mut fiber = runner::Runtime::default();
         // let context = runner::Context::root(&mut fiber);

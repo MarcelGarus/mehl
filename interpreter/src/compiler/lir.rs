@@ -1,4 +1,5 @@
 pub use super::hir::Id;
+use super::primitives::PrimitiveKind;
 use std::{collections::HashMap, fmt};
 
 #[derive(Clone, PartialEq, Eq)]
@@ -20,7 +21,7 @@ pub enum Expr {
         arg: Id,
     },
     Primitive {
-        kind: super::hir::Primitive,
+        kind: Option<PrimitiveKind>,
         arg: Id,
     },
 }

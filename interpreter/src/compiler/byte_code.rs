@@ -1,3 +1,4 @@
+use super::primitives::PrimitiveKind;
 use std::convert::TryInto;
 
 /// The byte code is just a binary representations of `Instruction`s.
@@ -40,8 +41,7 @@ pub enum Instruction {
     Return, // Returns from the current closure to the original IP.
 
     // Primitives.
-    Primitive,
-    PrimitivePrint,
+    Primitive(Option<PrimitiveKind>),
 }
 
 impl Instruction {
@@ -109,8 +109,9 @@ impl<'a> Parser<'a> {
             12 => Jump(self.get_u64()),
             13 => Call,
             14 => Return,
-            15 => Primitive,
-            16 => PrimitivePrint,
+            15 => Primitive(None),
+            21 => Primitive(Some(PrimitiveKind::Add)),
+            16 => Primitive(Some(PrimitiveKind::Print)),
             opcode => panic!("Unknown byte code opcode {}.", opcode),
         }
     }

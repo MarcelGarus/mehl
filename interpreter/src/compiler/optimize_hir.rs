@@ -1,4 +1,4 @@
-use super::hir::*;
+use super::{hir::*, primitives::PrimitiveKind};
 use std::collections::{HashMap, HashSet};
 
 impl Code {
@@ -43,9 +43,8 @@ impl Statement {
             | Statement::Code(_) => true,
             Statement::Call { .. } => false,
             Statement::Primitive { kind, .. } => match kind {
-                Primitive::Magic => false,
-                Primitive::Add => true,
-                Primitive::Print => false,
+                None => false,
+                Some(kind) => kind.is_pure(),
             },
         }
     }
@@ -146,10 +145,7 @@ impl Code {
 impl Statement {
     fn try_making_concrete(&self, statements: &im::HashMap<Id, Statement>) -> Option<Statement> {
         let arg = match self {
-            Statement::Primitive {
-                kind: Primitive::Magic,
-                arg,
-            } => *arg,
+            Statement::Primitive { kind: None, arg } => *arg,
             _ => return None,
         };
         let arg = match statements.get(&arg).unwrap() {
@@ -166,12 +162,10 @@ impl Statement {
             _ => return None,
         };
 
-        let kind = match primitive.as_str() {
-            "add" => Primitive::Add,
-            "print" => Primitive::Print,
-            _ => return None,
-        };
-        Some(Statement::Primitive { kind, arg })
+        Some(Statement::Primitive {
+            kind: Some(PrimitiveKind::parse(&primitive)?),
+            arg,
+        })
     }
 }
 
@@ -236,7 +230,9 @@ impl Code {
             let clone = statement.clone();
             if let Statement::Primitive { kind, arg } = statement {
                 if clone.is_pure() {
-                    if let Some(result) = Self::run_pure_primitive(kind, *arg, &statements) {
+                    if let Some(result) =
+                        Self::run_pure_primitive(&kind.unwrap(), *arg, &statements)
+                    {
                         *statement = result;
                     }
                 }
@@ -245,28 +241,31 @@ impl Code {
         }
     }
     fn run_pure_primitive(
-        kind: &Primitive,
+        kind: &PrimitiveKind,
         arg: Id,
         statements: &im::HashMap<Id, Statement>,
     ) -> Option<Statement> {
         match kind {
-            Primitive::Add => {
-                let list = match statements.get(&arg).unwrap() {
-                    Statement::List(list) => list,
-                    _ => return None,
-                };
-                let numbers = list
-                    .iter()
-                    .map(|id| match statements.get(id).unwrap().clone() {
-                        Statement::Int(int) => Some(int),
-                        _ => return None,
-                    })
-                    .flatten()
-                    .collect::<Vec<_>>();
-                let sum: i64 = numbers.into_iter().sum();
-                Some(Statement::Int(sum))
+            // Primitive::Add => {
+            //     let list = match statements.get(&arg).unwrap() {
+            //         Statement::List(list) => list,
+            //         _ => return None,
+            //     };
+            //     let numbers = list
+            //         .iter()
+            //         .map(|id| match statements.get(id).unwrap().clone() {
+            //             Statement::Int(int) => Some(int),
+            //             _ => return None,
+            //         })
+            //         .flatten()
+            //         .collect::<Vec<_>>();
+            //     let sum: i64 = numbers.into_iter().sum();
+            //     Some(Statement::Int(sum))
+            // }
+            _ => {
+                println!("Unknown pure primitive {:?}.", kind);
+                None
             }
-            _ => panic!("Unknown pure primitive {:?}.", kind),
         }
     }
 }
