@@ -411,7 +411,6 @@ impl Fiber {
                         self.primitive_send(arg);
                         None
                     }
-                    PrimitiveKind::Print => Some(self.primitive_print(arg)),
                 };
                 if let Some(value) = value {
                     let address = self.import(value);
@@ -463,11 +462,6 @@ impl Fiber {
             _ => panic!("Send called with a list where the first item is not a ChannelSendEnd."),
         };
         self.status = FiberStatus::Sending(channel_end, message);
-    }
-
-    fn primitive_print(&mut self, arg: Value) -> Value {
-        println!("🌮> {:?}", arg);
-        Value::Symbol("".into())
     }
 
     // Resolve status.
