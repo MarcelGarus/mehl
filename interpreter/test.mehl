@@ -1,13 +1,5 @@
-[(:get-ambient, .) ✨] -> ambient
-[(:send, .) ✨] -> Channel.send
-[(:stdout ambient, .) Channel.send] -> print
-[(:add, .) ✨] -> Int.+
-
-"Hello, world!" => a
-a print
-
-[(1, 2) Int.+ print] -> foo
-foo
+"Enter a number:" print
+read print
 
 # ...
 

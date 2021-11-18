@@ -1,138 +1,69 @@
 ### The Mehl Core Library
-
-# Welcome! This library is implicitly included at the start of every Mehl run.
-# There are comments throughout so that you can read it from top to bottom like
+#
+# Welcome! This library offers functionality that is useful in almost all Mehl
+# programs. It's well-commented so that you can read it from top to bottom like
 # a book.
-
+#
 # In Mehl, `✨` is the entry point for the Mehl interpreter to offer various
 # features that would be impossible or impractical to implement directly in Mehl
 # itself. Calls to these magic primitives have the following form:
-# `(primitive-name, args) ✨`
-# The primitive entry point `✨` is automatically made available before any
-# code runs. Note that you can loose access to `✨`, for example by redefining
-# it to be something else.
+# `(primitive-name, argument) ✨`
 
-### Keywords to bind functions and code
-
-# In Mehl, there is no distinction between variables or functions – variables
-# are just functions which always return the same result. You can use `fun` to
-# define a function, or `let` if you already have a value. Both of these
-# keywords are themselves functions.
-# How can this possibly work? Each function has an *export level*, which defines
-# how often it should be exported from the current function call. The default
-# export level is 0, but the `:fun` primitive accepts an arbitrary export level.
-# That means it's possible to define functions that define functions in the
-# surrounding scope when they're used!
-
-{ :name, :let, :docs, "Defines a new value. Usage: (:a, 5) let", :body, [
-  (:let, { :name, (:name, :value), :value, . }) ✨
-  (:let, { :name, name, :value, value, :export-level, 1 }) ✨
-] } (:fun, .) ✨
-
-{ :name, :fun, :docs, "Defines a new function. Usage: (:foo, docs, [1]) fun", :body, [
-  ((:name, :docs, :body), .) let
-  (:fun, { :name, name, :docs, docs, :body, body, :export-level, 1 }) ✨
-] } (:fun, .) ✨
-
-# To define something publically, `pub-let` and `pub-fun` are useful. They have
-# an export level of 2, which means that if you use them to define something in
-# a scope and that scope gets imported somewhere else, the functions are also
-# imported:
+## Fibers
 #
-# ```
-# [
-#   (:foo, "A foo.", ["Hello, world!" print]) pub-fun
-#   (:bar, 5) pub-let
-# ] use
+# Fibers are concurrent execution strands. They are comparable to the threads
+# of an operating system, but much more lightweight.
+
+[(:panic, .) ✨] -> panic
+[(:todo, "Todo: This part of the program is missing.") panic] -> ...
+
+## Ambients
 #
-# foo # Prints "Hello, world!"
-# ```
+# Fibers can have ambients, which are global, dynamic variables that don't need
+# to be passed into functions explicitly.
 
-(:pub-let, "Defines a new public value that is available if the current scope is imported somewhere else.", [
-  ((:name, :value), .) let
-  (:let, { :name, name, :value, value, :export-level, 2 }) ✨
-]) fun
+[(:get-ambient, .) ✨] -> ambient
 
-(:pub-fun, "Defines a new public function that is available if the current scope is imported somewhere else.", [
-  ((:name, :docs, :body), .) let
-  (:fun, { :name, name, :docs, docs, :body, body, :export-level, 2 }) ✨
-]) fun
+## Channels
+#
+# Fibers can communicate using channels, which are like streams of values that
+# flow between them. When creating such a channel, the VM gives you two ends:
+# One for sending messages and one for receiving them.
 
-(:use, "Executes code and then imports functions that it exported.", [
-  (:use, .) ✨ # Runs the code and makes functions available in this scope.
-  (:export-all, :) ✨ # Increases the export level of all functions in this scope.
-]) fun
+[(:send, .) ✨] -> Channel.send
+[(:receive, .) ✨] -> Channel.receive
 
-### Matching
+## Int
 
-(:match, "Matches over conditions.", [(:match, .) ✨]) fun
+[(:add, .) ✨] -> Int.+
+[(:subtract, .) ✨] -> Int.-
+[(:multiply, .) ✨] -> Int.*
+[(:divide, .) ✨] -> Int./
+[(:modulo, .) ✨] -> Int.mod
 
-### Code
+## Code
 
-(:run, "Runs code.", [(:run, .) ✨]) fun
-(:repeat, "Runs code a given number of times.", [(:repeat, .) ✨]) fun
-(:loop, "Runs code again and again.", [(:loop, .) ✨]) fun
+[(:run, .) ✨] -> run
+[(:repeat, .) ✨] -> repeat
+[(:loop, .) ✨] -> loop
 
-### Panicking
+## Todo: Bool
+#
+# Boolean values (or bools for short) encode truthfulness. A value is a bool if
+# it's either `:true` or `:false`.
 
-(:panic, "Crashes the program.", [(:panic, .) ✨]) fun
-(:..., "Indicates that some part of the program is not implemented yet. Panics if evaluated.", [
-  (:todo, "Todo: This part of the program is not yet implemented.") panic
-]) fun
+## Input and Output
 
-### Numbers
+[:stdin ambient] -> stdin
+[:stdout ambient] -> stdout
+[(stdout, .) Channel.send] -> print
+[stdin Channel.receive] -> read
 
-(:+, "Adds a list of numbers.", [(:+, .) ✨]) fun
-(:-, "Subtracts one number from another.", [(:-, .) ✨]) fun
-(:*, "Multiplies a list of numbers.", [(:*, .) ✨]) fun
-(:/, "Divides one number by another.", [(:/, .) ✨]) fun
-(:mod, "Takes one number modulo another one.", [(:mod, .) ✨]) fun
+## Todo: Time
 
-### Input and Output
-
-(:print, "Prints to stdout.", [(:print, .) ✨]) fun
-
-### Time
-
-(:wait, "Waits an amount of seconds.", [(:wait, .) ✨]) fun
-
-### Bools
-
-# Boolean values (or bools for short) encode truthfulness. A value is considered
-# a bool if it's either `:true` or `:false`.
-
-(:bool?, "Checks if a value is a bool.", [
-  (., :true, [:true], :false, [:true], :_, [:false]) match
-]) fun
-(:not, "Inverses the bool", [
-  (.,
-    :false, [:true],
-    :true, [:false],
-    :_, [(:wrong-usage, "not needs a bool") panic]
-  ) match
-]) fun
-(:and, "Checks if both bools are true", [
-  (.,
-    (:false, :false), [:false],
-    (:false, :true), [:false],
-    (:true, :false), [:false],
-    (:true, :true), [:true],
-    :_, [(:wrong-usage, "and needs a pair of bools") panic]
-  ) match
-]) fun
-(:or, "Checks if at least one bool is true", [
-  (.,
-    (:false, :false), [:false],
-    (:false, :true), [:true],
-    (:true, :false), [:true],
-    (:true, :true), [:true],
-    :_, [(:wrong-usage, "or needs a pair of bools") panic]
-  ) match
-]) fun
-
-### Todo
-
+## Todo
 # - bignums
+# - match
 # - more primitives
 #  - =, !=
 #  - panic
@@ -140,12 +71,12 @@
 #  - String.bytes, String.chars
 #  - Map.get, Map.insert, Map.join, Map.keys
 #  - List.get, List.len
-#  - Ambient.get, Ambient.set
 #  - Fiber.new, Fiber.run, Fiber.spawn, Fiber.kill, Fiber.set-priority
 #  - wait
 #  - Channel.send, Channel.receive
 # - fibers
 # - better Core library
+#  - Panic: assert
 #  - Bool: Bool.not, Bool.&, Bool.|, Bool.=>
 #  - Maybe: Maybe.unwrap, Maybe.map
 #  - Result: Result.unwrap, Result.map, Result.map-error
