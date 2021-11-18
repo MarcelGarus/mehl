@@ -1,12 +1,15 @@
 pub use super::hir::Id;
 use super::primitives::PrimitiveKind;
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Statement {
     Assignment { id: Id, value: Expr },
-    Dup(Id),
-    Drop(Id),
+    Dup(Vec<Id>),  // Turn into multiset.
+    Drop(Vec<Id>), // Turn into multiset.
 }
 #[derive(Clone, PartialEq, Eq)]
 pub enum Expr {
@@ -53,8 +56,8 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Statement::Assignment { id, value } => write!(f, "{} = {}", id, value),
-            Statement::Dup(id) => write!(f, "dup {}", id),
-            Statement::Drop(id) => write!(f, "drop {}", id),
+            Statement::Dup(ids) => write!(f, "dup {:?}", ids),
+            Statement::Drop(ids) => write!(f, "drop {:?}", ids),
         }
     }
 }

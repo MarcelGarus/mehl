@@ -1,4 +1,4 @@
-use crate::compiler::byte_code::{Address, ByteCode};
+use crate::compiler::byte_code::Address;
 use std::collections::HashMap;
 
 pub type Pointer = u64;

@@ -33,7 +33,7 @@ impl hir::Code {
                 }
                 ids_to_drop.remove(&self.out);
                 for id in ids_to_drop {
-                    statements.push(Statement::Drop(id));
+                    statements.push(Statement::Drop(vec![id]));
                 }
                 statements
             },
@@ -56,66 +56,54 @@ impl hir::Statement {
                 id,
                 value: Expr::Symbol(symbol.clone()),
             }],
-            hir::Statement::Map(map) => {
-                let mut statements = vec![];
-                for (key, value) in map {
-                    statements.push(Statement::Dup(*key));
-                    statements.push(Statement::Dup(*value));
-                }
-                statements.push(Statement::Assignment {
+            hir::Statement::Map(map) => vec![
+                Statement::Dup(
+                    map.iter()
+                        .flat_map(|(k, v)| vec![*k, *v].into_iter())
+                        .collect(),
+                ),
+                Statement::Assignment {
                     id,
                     value: Expr::Map(map.clone()),
-                });
-                statements
-            }
-            hir::Statement::List(list) => {
-                let mut statements = vec![];
-                for item in list {
-                    statements.push(Statement::Dup(*item));
-                }
-                statements.push(Statement::Assignment {
+                },
+            ],
+            hir::Statement::List(list) => vec![
+                Statement::Dup(list.iter().map(|i| *i).collect()),
+                Statement::Assignment {
                     id,
                     value: Expr::List(list.clone()),
-                });
-                statements
-            }
+                },
+            ],
             hir::Statement::Code(code) => {
                 let closure = code.compile_to_lir();
                 let mut statements = vec![];
-                for captured_var in &closure.captured {
-                    statements.push(Statement::Dup(*captured_var));
-                }
+                statements.push(Statement::Dup(closure.captured.clone()));
                 statements.push(Statement::Assignment {
                     id,
                     value: Expr::Closure(closure),
                 });
                 statements
             }
-            hir::Statement::Call { fun, arg } => {
-                let mut statements = vec![];
-                statements.push(Statement::Dup(*fun));
-                statements.push(Statement::Dup(*arg));
-                statements.push(Statement::Assignment {
+            hir::Statement::Call { fun, arg } => vec![
+                Statement::Dup(vec![*fun, *arg]),
+                Statement::Assignment {
                     id,
                     value: Expr::Call {
                         closure: *fun,
                         arg: *arg,
                     },
-                });
-                statements
-            }
-            hir::Statement::Primitive { kind, arg } => {
-                let mut statements = vec![];
-                statements.push(Statement::Dup(*arg));
-                statements.push(Statement::Assignment {
+                },
+            ],
+            hir::Statement::Primitive { kind, arg } => vec![
+                Statement::Dup(vec![*arg]),
+                Statement::Assignment {
                     id,
                     value: Expr::Primitive {
                         kind: *kind,
                         arg: *arg,
                     },
-                });
-                statements
-            }
+                },
+            ],
         }
     }
 }

@@ -213,7 +213,7 @@ impl Fiber {
             let (instruction, num_bytes_consumed) =
                 Instruction::parse(&self.byte_code[self.ip as usize..])
                     .expect("Couldn't parse instruction.");
-            println!("Next instruction: {:?}", &instruction);
+            // println!("Next instruction: {:?}", &instruction);
             self.run_instruction(instruction);
 
             self.ip += num_bytes_consumed as u64;
@@ -411,6 +411,10 @@ impl Fiber {
                         self.primitive_send(arg);
                         None
                     }
+                    PrimitiveKind::Receive => {
+                        self.primitive_receive(arg);
+                        None
+                    }
                 };
                 if let Some(value) = value {
                     let address = self.import(value);
@@ -464,10 +468,24 @@ impl Fiber {
         self.status = FiberStatus::Sending(channel_end, message);
     }
 
+    fn primitive_receive(&mut self, arg: Value) {
+        let channel_end = match arg {
+            Value::ChannelReceiveEnd(channel_end) => channel_end,
+            _ => panic!("Receive called, but the argument is not a ChannelReceiveEnd."),
+        };
+        self.status = FiberStatus::Receiving(channel_end);
+    }
+
     // Resolve status.
 
     pub fn resolve_sending(&mut self) {
         let address = self.import(Value::Symbol("".into()));
+        self.stack.push(StackEntry::AddressInHeap(address));
+        self.status = FiberStatus::Running;
+    }
+
+    pub fn resolve_receiving(&mut self, message: Value) {
+        let address = self.import(message);
         self.stack.push(StackEntry::AddressInHeap(address));
         self.status = FiberStatus::Running;
     }

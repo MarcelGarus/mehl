@@ -3,6 +3,7 @@ pub enum PrimitiveKind {
     Add,
     GetAmbient,
     Send,
+    Receive,
 }
 
 impl PrimitiveKind {
@@ -11,6 +12,7 @@ impl PrimitiveKind {
             "add" => Self::Add,
             "get-ambient" => Self::GetAmbient,
             "send" => Self::Send,
+            "receive" => Self::Receive,
             _ => return None,
         })
     }
@@ -20,6 +22,7 @@ impl PrimitiveKind {
             Self::Add => true,
             Self::GetAmbient => false,
             Self::Send => false,
+            Self::Receive => false,
         }
     }
 }

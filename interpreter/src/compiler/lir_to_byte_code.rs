@@ -15,10 +15,10 @@ impl lir::Closure {
 
     fn compile_body(&self, out: &mut ByteCode) {
         let mut stack = self.captured.clone();
-        println!("Compiling body. Captured: {:?}", self.captured);
+        // println!("Compiling body. Captured: {:?}", self.captured);
         stack.push(self.in_);
         for statement in &self.code {
-            println!("Stack is {:?}.", stack);
+            // println!("Stack is {:?}.", stack);
             statement.compile(out, &mut stack);
         }
         out.push_instruction(push_from_stack_instruction(stack.reference_id(self.out)));
@@ -114,11 +114,15 @@ impl lir::Statement {
                     stack.push(*id);
                 }
             },
-            lir::Statement::Dup(id) => {
-                out.push_instruction(dup_instruction(stack.reference_id(*id)))
+            lir::Statement::Dup(ids) => {
+                for id in ids {
+                    out.push_instruction(dup_instruction(stack.reference_id(*id)))
+                }
             }
-            lir::Statement::Drop(id) => {
-                out.push_instruction(drop_instruction(stack.reference_id(*id)))
+            lir::Statement::Drop(ids) => {
+                for id in ids {
+                    out.push_instruction(drop_instruction(stack.reference_id(*id)))
+                }
             }
         }
     }
@@ -249,6 +253,7 @@ impl ByteCodeExt for ByteCode {
             Primitive(Some(PrimitiveKind::Add)) => self.push_u8(21),
             Primitive(Some(PrimitiveKind::GetAmbient)) => self.push_u8(22),
             Primitive(Some(PrimitiveKind::Send)) => self.push_u8(23),
+            Primitive(Some(PrimitiveKind::Receive)) => self.push_u8(24),
         }
     }
     fn update_jump_target(&mut self, jump_address: Address, target: Address) {
