@@ -416,6 +416,7 @@ dependencies = [
  "colored",
  "im",
  "itertools",
+ "log",
  "lspower",
  "nom",
  "simplelog",

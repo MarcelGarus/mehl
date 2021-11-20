@@ -1,3 +1,5 @@
+use log::debug;
+
 use crate::utils::RemoveLast;
 
 use super::byte_code::*;
@@ -171,7 +173,7 @@ impl ByteCodeExt for ByteCode {
     }
     fn push_instruction(&mut self, instruction: Instruction) {
         use Instruction::*;
-        println!("Pushing instruction {:?}", instruction);
+        debug!("Pushing instruction {:?}", instruction);
         match instruction {
             CreateInt(int) => {
                 self.push_u8(0);

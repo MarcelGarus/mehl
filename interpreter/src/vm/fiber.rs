@@ -3,6 +3,7 @@ use crate::compiler::byte_code::{Address, ByteCode, Instruction, StackOffset};
 use crate::compiler::PrimitiveKind;
 use crate::utils::*;
 use itertools::Itertools;
+use log::debug;
 use std::collections::HashMap;
 
 /// A fiber can execute some byte code. It's "single-threaded", a pure
@@ -216,9 +217,9 @@ impl Fiber {
             let (instruction, num_bytes_consumed) =
                 Instruction::parse(&self.byte_code[self.ip as usize..])
                     .expect("Couldn't parse instruction.");
-            // println!("Next instruction: {:?}", &instruction);
+            debug!("Next instruction: {:?}", &instruction);
             self.run_instruction(instruction);
-            // println!("Fiber: {:?}", self);
+            debug!("Fiber: {:?}", self);
 
             self.ip += num_bytes_consumed as u64;
             if self.ip >= self.byte_code.len() as u64 {

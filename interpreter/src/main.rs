@@ -6,11 +6,13 @@ mod vm;
 use crate::compiler::*;
 use crate::vm::{Fiber, FiberStatus, Value};
 use colored::Colorize;
+use log::{debug, info, Log};
 use lspower::jsonrpc::Result;
 use lspower::lsp::*;
 use lspower::{Client, LanguageServer, LspService, Server};
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 use std::collections::HashMap;
+use std::io::{stdout, Write};
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -26,7 +28,7 @@ enum Mehl {
 #[tokio::main]
 async fn main() {
     TermLogger::init(
-        LevelFilter::Warn,
+        LevelFilter::Info,
         Config::default(),
         TerminalMode::Mixed,
         ColorChoice::Auto,
@@ -34,10 +36,10 @@ async fn main() {
     .unwrap();
 
     let options = Mehl::from_args();
-    println!("{:#?}", options);
+    debug!("{:#?}", options);
     match options {
         Mehl::Run => {
-            println!("Running test.mehl.\n");
+            debug!("Running test.mehl.\n");
 
             let code = {
                 let core_code =
@@ -51,22 +53,21 @@ async fn main() {
                 Ok(it) => it,
                 Err(err) => panic!("Couldn't parse ASTs of core.mehl: {}", err),
             };
-            println!("AST: {}\n", &ast);
+            debug!("AST: {}\n", &ast);
 
             let mut hir = ast.compile_to_hir();
             hir.optimize();
-            println!("HIR: {}", hir);
+            debug!("HIR: {}", hir);
 
             let mut lir = hir.compile_to_lir();
-            println!("LIR: {}", lir);
             lir.optimize();
-            println!("LIR: {}", lir);
+            debug!("LIR: {}", lir);
 
-            println!("Compiling to byte code...");
+            debug!("Compiling to byte code...");
             let byte_code = lir.compile_to_byte_code();
-            println!("Byte code: {:?}", byte_code);
+            debug!("Byte code: {:?}", byte_code);
 
-            println!("Running in VM...");
+            debug!("Running in VM...");
             let mut ambients = HashMap::new();
             ambients.insert("stdout".into(), Value::ChannelSendEnd(0));
             ambients.insert("stdin".into(), Value::ChannelReceiveEnd(1));
@@ -81,7 +82,17 @@ async fn main() {
                     }
                     FiberStatus::Sending(channel_id, message) => match channel_id {
                         0 => {
-                            println!("{}", format!("🌮> {:?}", message).yellow());
+                            let mut out = stdout();
+                            out.write(
+                                if let Value::String(string) = message {
+                                    string
+                                } else {
+                                    format!("{:?}", message)
+                                }
+                                .as_bytes(),
+                            )
+                            .unwrap();
+                            out.flush().unwrap();
                             fiber.resolve_sending();
                         }
                         _ => panic!("Unknown channel id {}.", channel_id),
@@ -98,7 +109,7 @@ async fn main() {
                     },
                 }
             }
-            println!("{:?}", fiber);
+            debug!("{:?}", fiber);
 
             // let mut fiber = runner::Runtime::default();
             // let context = runner::Context::root(&mut fiber);

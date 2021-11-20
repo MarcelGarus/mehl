@@ -1,4 +1,4 @@
-"Enter a number:" print
+"Enter your name: " print
 read print
 
 # ...
