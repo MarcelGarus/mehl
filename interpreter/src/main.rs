@@ -1,12 +1,11 @@
 mod compiler;
-mod runner;
 mod utils;
 mod vm;
 
 use crate::compiler::*;
 use crate::vm::{Fiber, FiberStatus, Value};
 use colored::Colorize;
-use log::{debug, info, Log};
+use log::debug;
 use lspower::jsonrpc::Result;
 use lspower::lsp::*;
 use lspower::{Client, LanguageServer, LspService, Server};
