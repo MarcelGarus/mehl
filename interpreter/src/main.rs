@@ -37,7 +37,7 @@ async fn main() {
     println!("{:#?}", options);
     match options {
         Mehl::Run => {
-            println!("Running test.mehl.");
+            println!("Running test.mehl.\n");
 
             let code = {
                 let core_code =
@@ -51,13 +51,15 @@ async fn main() {
                 Ok(it) => it,
                 Err(err) => panic!("Couldn't parse ASTs of core.mehl: {}", err),
             };
-            println!("AST: {}", &ast);
+            println!("AST: {}\n", &ast);
 
             let mut hir = ast.compile_to_hir();
             hir.optimize();
             println!("HIR: {}", hir);
 
-            let lir = hir.compile_to_lir();
+            let mut lir = hir.compile_to_lir();
+            println!("LIR: {}", lir);
+            lir.optimize();
             println!("LIR: {}", lir);
 
             println!("Compiling to byte code...");
@@ -68,7 +70,7 @@ async fn main() {
             let mut ambients = HashMap::new();
             ambients.insert("stdout".into(), Value::ChannelSendEnd(0));
             ambients.insert("stdin".into(), Value::ChannelReceiveEnd(1));
-            let mut fiber = Fiber::new(byte_code, ambients);
+            let mut fiber = Fiber::new(byte_code, ambients, Value::Symbol("".into()));
             loop {
                 fiber.run(30);
                 match fiber.status() {

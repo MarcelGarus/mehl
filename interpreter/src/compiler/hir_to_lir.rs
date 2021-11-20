@@ -31,6 +31,7 @@ impl hir::Code {
                         ids_to_drop.insert(*id);
                     }
                 }
+                ids_to_drop.insert(self.in_);
                 ids_to_drop.remove(&self.out);
                 for id in ids_to_drop {
                     statements.push(Statement::Drop(vec![id]));

@@ -57,8 +57,8 @@ pub enum ObjectData {
 }
 
 impl Fiber {
-    pub fn new(byte_code: ByteCode, ambients: HashMap<String, Value>) -> Self {
-        Self {
+    pub fn new(byte_code: ByteCode, ambients: HashMap<String, Value>, dot: Value) -> Self {
+        let mut fiber = Self {
             byte_code,
             ambients,
             status: FiberStatus::Running,
@@ -66,7 +66,10 @@ impl Fiber {
             stack: vec![],
             heap: HashMap::new(),
             next_heap_address: 123450000,
-        }
+        };
+        let address = fiber.import(dot);
+        fiber.stack.push(StackEntry::AddressInHeap(address));
+        fiber
     }
 
     pub fn status(&self) -> FiberStatus {
@@ -215,6 +218,7 @@ impl Fiber {
                     .expect("Couldn't parse instruction.");
             // println!("Next instruction: {:?}", &instruction);
             self.run_instruction(instruction);
+            // println!("Fiber: {:?}", self);
 
             self.ip += num_bytes_consumed as u64;
             if self.ip >= self.byte_code.len() as u64 {

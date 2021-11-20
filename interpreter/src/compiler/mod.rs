@@ -6,9 +6,11 @@ mod hir_to_lir;
 mod lir;
 mod lir_to_byte_code;
 mod optimize_hir;
+mod optimize_lir;
 mod primitives;
 mod string_to_ast;
 
 pub use ast_to_hir::CompileAstsToHir;
+pub use optimize_lir::OptimizeLir;
 pub use primitives::PrimitiveKind;
 pub use string_to_ast::ParseStringToAsts;
