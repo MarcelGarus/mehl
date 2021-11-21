@@ -70,13 +70,17 @@ async fn main() {
             let mut ambients = HashMap::new();
             ambients.insert("stdout".into(), Value::ChannelSendEnd(0));
             ambients.insert("stdin".into(), Value::ChannelReceiveEnd(1));
-            let mut fiber = Fiber::new(byte_code, ambients, Value::Symbol("".into()));
+            let mut fiber = Fiber::new(byte_code, ambients, Value::unit());
             loop {
                 fiber.run(30);
                 match fiber.status() {
                     FiberStatus::Running => {}
                     FiberStatus::Done(value) => {
-                        println!("{}", format!("Done running: {:?}", value).green());
+                        println!("{}", format!("Done running: {}", value).green());
+                        break;
+                    }
+                    FiberStatus::Panicked(value) => {
+                        println!("{}", format!("Panicked: {}", value).red());
                         break;
                     }
                     FiberStatus::Sending(channel_id, message) => match channel_id {
@@ -86,7 +90,7 @@ async fn main() {
                                 if let Value::String(string) = message {
                                     string
                                 } else {
-                                    format!("{:?}", message)
+                                    message.to_string()
                                 }
                                 .as_bytes(),
                             )

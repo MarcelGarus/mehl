@@ -2,6 +2,7 @@
 pub enum PrimitiveKind {
     Add,
     GetAmbient,
+    Panic,
     Send,
     Receive,
 }
@@ -11,6 +12,7 @@ impl PrimitiveKind {
         Some(match symbol {
             "add" => Self::Add,
             "get-ambient" => Self::GetAmbient,
+            "panic" => Self::Panic,
             "send" => Self::Send,
             "receive" => Self::Receive,
             _ => return None,
@@ -21,6 +23,7 @@ impl PrimitiveKind {
         match self {
             Self::Add => true,
             Self::GetAmbient => false,
+            Self::Panic => false,
             Self::Send => false,
             Self::Receive => false,
         }

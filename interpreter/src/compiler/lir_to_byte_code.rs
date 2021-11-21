@@ -254,6 +254,7 @@ impl ByteCodeExt for ByteCode {
             Primitive(None) => self.push_u8(15),
             Primitive(Some(PrimitiveKind::Add)) => self.push_u8(21),
             Primitive(Some(PrimitiveKind::GetAmbient)) => self.push_u8(22),
+            Primitive(Some(PrimitiveKind::Panic)) => self.push_u8(25),
             Primitive(Some(PrimitiveKind::Send)) => self.push_u8(23),
             Primitive(Some(PrimitiveKind::Receive)) => self.push_u8(24),
         }

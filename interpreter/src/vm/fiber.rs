@@ -24,6 +24,7 @@ pub struct Fiber {
 pub enum FiberStatus {
     Running,
     Done(Value),
+    Panicked(Value),
     Sending(ChannelId, Value),
     Receiving(ChannelId),
 }
@@ -387,43 +388,46 @@ impl Fiber {
                     StackEntry::AddressInHeap(address) => address,
                 };
                 let arg = self.export(arg);
+
+                fn split_kind_and_arg(arg: Value) -> Result<(PrimitiveKind, Value), String> {
+                    let (symbol, arg) = arg
+                        .list()
+                        .needed("Primitive called with a non-list.")?
+                        .tuple2()
+                        .needed("Primitive called with a list that doesn't contain 2 items.")?;
+                    let symbol = symbol
+                        .symbol()
+                        .needed("Primitive called, but the first argument is not a symbol.")?;
+                    let kind = PrimitiveKind::parse(&symbol)
+                        .needed(format!("Unknown primitive {}.", symbol))?;
+                    Ok((kind, arg))
+                }
                 let (kind, arg) = match kind {
                     Some(kind) => (kind, arg),
-                    None => {
-                        let list = match arg {
-                            Value::List(list) => list,
-                            _ => panic!("Primitive called with a non-list."),
-                        };
-                        let (symbol, arg) = list
-                            .tuple2()
-                            .expect("Primitive called with a list that doesn't contain 2 items.");
-                        let symbol = match symbol {
-                            Value::Symbol(symbol) => symbol,
-                            _ => {
-                                panic!("Primitive called, but the first argument is not a symbol.")
-                            }
-                        };
-                        let kind = PrimitiveKind::parse(&symbol)
-                            .expect(&format!("Unknown primitive {}.", symbol));
-                        (kind, arg)
-                    }
+                    None => match split_kind_and_arg(arg) {
+                        Ok(kind_and_arg) => kind_and_arg,
+                        Err(error) => {
+                            self.status = wrong_usage_panic_status(error);
+                            return;
+                        }
+                    },
                 };
 
-                let value = match kind {
-                    PrimitiveKind::Add => Some(self.primitive_add(arg)),
-                    PrimitiveKind::GetAmbient => Some(self.primitive_get_ambient(arg)),
-                    PrimitiveKind::Send => {
-                        self.primitive_send(arg);
-                        None
-                    }
-                    PrimitiveKind::Receive => {
-                        self.primitive_receive(arg);
-                        None
-                    }
+                let primitive_result = match kind {
+                    PrimitiveKind::Add => self.primitive_add(arg).map(Some),
+                    PrimitiveKind::GetAmbient => self.primitive_get_ambient(arg).map(Some),
+                    PrimitiveKind::Panic => self.primitive_panic(arg).map(|_| None),
+                    PrimitiveKind::Send => self.primitive_send(arg).map(|_| None),
+                    PrimitiveKind::Receive => self.primitive_receive(arg).map(|_| None),
                 };
-                if let Some(value) = value {
-                    let address = self.import(value);
-                    self.stack.push(StackEntry::AddressInHeap(address));
+                match primitive_result {
+                    Ok(value) => {
+                        if let Some(value) = value {
+                            let address = self.import(value);
+                            self.stack.push(StackEntry::AddressInHeap(address));
+                        }
+                    }
+                    Err(message) => self.status = wrong_usage_panic_status(message),
                 }
             }
         }
@@ -431,60 +435,54 @@ impl Fiber {
 
     // Primitives.
 
-    fn primitive_add(&mut self, arg: Value) -> Value {
-        let list = match arg {
-            Value::List(list) => list,
-            _ => panic!("Add called with something that is not a list."),
-        };
+    fn primitive_add(&mut self, arg: Value) -> Result<Value, String> {
+        let list = arg.list().needed("Add needs a list.")?;
         let (a, b) = list
             .tuple2()
-            .expect("Add called with a list that has a different number than 2 elements.");
-        let a = match a {
-            Value::Int(a) => a,
-            _ => panic!("Add called with a list that contains something other than numbers."),
-        };
-        let b = match b {
-            Value::Int(b) => b,
-            _ => panic!("Add called with a list that contains something other than numbers."),
-        };
-        Value::Int(a + b)
+            .needed("Add called with a list that has a different number than 2 elements.")?;
+        let a = a.int().needed("Add needs a list with only numbers.")?;
+        let b = b.int().needed("Add needs a list with only numbers.")?;
+        Ok(Value::Int(a + b))
     }
 
-    fn primitive_get_ambient(&mut self, arg: Value) -> Value {
-        let symbol = match arg {
-            Value::Symbol(symbol) => symbol,
-            _ => panic!("GetAmbient called with a non-symbol."),
-        };
-        (*self.ambients.get(&symbol).expect("Ambient doesnt exist.")).clone()
+    fn primitive_get_ambient(&mut self, arg: Value) -> Result<Value, String> {
+        let symbol = arg.symbol().needed("GetAmbient needs a symbol.")?;
+        Ok(self
+            .ambients
+            .get(&symbol)
+            .needed(format!("No ambient named {} exists.", symbol))?
+            .clone())
     }
 
-    fn primitive_send(&mut self, arg: Value) {
-        let list = match arg {
-            Value::List(list) => list,
-            _ => panic!("Send called with something that is not a list."),
-        };
+    fn primitive_panic(&mut self, arg: Value) -> Result<(), String> {
+        self.status = FiberStatus::Panicked(arg);
+        Ok(())
+    }
+
+    fn primitive_send(&mut self, arg: Value) -> Result<(), String> {
+        let list = arg.list().needed("Send needs a list.")?;
         let (channel_end, message) = list
             .tuple2()
-            .expect("Send called with a list that has a different number than 2 elements.");
-        let channel_end = match channel_end {
-            Value::ChannelSendEnd(channel_end) => channel_end,
-            _ => panic!("Send called with a list where the first item is not a ChannelSendEnd."),
-        };
+            .needed("Send called with a list that has a different number than 2 elements.")?;
+        let channel_end = channel_end
+            .channel_send_end()
+            .needed("Send called with a list where the first item is not a ChannelSendEnd.")?;
         self.status = FiberStatus::Sending(channel_end, message);
+        Ok(())
     }
 
-    fn primitive_receive(&mut self, arg: Value) {
-        let channel_end = match arg {
-            Value::ChannelReceiveEnd(channel_end) => channel_end,
-            _ => panic!("Receive called, but the argument is not a ChannelReceiveEnd."),
-        };
+    fn primitive_receive(&mut self, arg: Value) -> Result<(), String> {
+        let channel_end = arg
+            .channel_receive_end()
+            .needed("Receive called, but the argument is not a ChannelReceiveEnd.")?;
         self.status = FiberStatus::Receiving(channel_end);
+        Ok(())
     }
 
     // Resolve status.
 
     pub fn resolve_sending(&mut self) {
-        let address = self.import(Value::Symbol("".into()));
+        let address = self.import(Value::unit());
         self.stack.push(StackEntry::AddressInHeap(address));
         self.status = FiberStatus::Running;
     }
@@ -494,4 +492,23 @@ impl Fiber {
         self.stack.push(StackEntry::AddressInHeap(address));
         self.status = FiberStatus::Running;
     }
+}
+
+trait Needed<T> {
+    fn needed<I: Into<String>>(self, message: I) -> Result<T, String>;
+}
+impl<T> Needed<T> for Option<T> {
+    fn needed<I: Into<String>>(self, message: I) -> Result<T, String> {
+        match self {
+            Some(value) => Ok(value),
+            None => Err(message.into()),
+        }
+    }
+}
+
+fn wrong_usage_panic_status<I: Into<String>>(message: I) -> FiberStatus {
+    FiberStatus::Panicked(Value::List(vec![
+        Value::Symbol("wrong-usage".into()),
+        Value::String(message.into()),
+    ]))
 }

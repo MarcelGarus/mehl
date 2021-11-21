@@ -112,6 +112,7 @@ impl<'a> Parser<'a> {
             15 => Primitive(None),
             21 => Primitive(Some(PrimitiveKind::Add)),
             22 => Primitive(Some(PrimitiveKind::GetAmbient)),
+            25 => Primitive(Some(PrimitiveKind::Panic)),
             23 => Primitive(Some(PrimitiveKind::Send)),
             24 => Primitive(Some(PrimitiveKind::Receive)),
             opcode => panic!("Unknown byte code opcode {}.", opcode),
