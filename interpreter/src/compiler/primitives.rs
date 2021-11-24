@@ -19,6 +19,16 @@ impl PrimitiveKind {
         })
     }
 
+    pub const fn all() -> [PrimitiveKind; 5] {
+        [
+            PrimitiveKind::Add,
+            PrimitiveKind::GetAmbient,
+            PrimitiveKind::Panic,
+            PrimitiveKind::Send,
+            PrimitiveKind::Receive,
+        ]
+    }
+
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Add => true,

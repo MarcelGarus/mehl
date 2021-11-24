@@ -1,7 +1,9 @@
 "Enter your name: " print
 read print
 
-:nonexistent ambient
+(1, 2, 3) Int.+ print
+
+#:nonexistent ambient
 ...
 
 # ({:foo, 4, :bar, 4},

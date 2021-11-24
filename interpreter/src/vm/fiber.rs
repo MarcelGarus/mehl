@@ -437,12 +437,15 @@ impl Fiber {
 
     fn primitive_add(&mut self, arg: Value) -> Result<Value, String> {
         let list = arg.list().needed("Add needs a list.")?;
-        let (a, b) = list
-            .tuple2()
-            .needed("Add called with a list that has a different number than 2 elements.")?;
-        let a = a.int().needed("Add needs a list with only numbers.")?;
-        let b = b.int().needed("Add needs a list with only numbers.")?;
-        Ok(Value::Int(a + b))
+        let mut ints = vec![];
+        for item in list {
+            ints.push(
+                item.int()
+                    .needed("Add called with a list that contains not only numbers.")?,
+            );
+        }
+        let sum = ints.into_iter().fold(0, |a, b| a + b);
+        Ok(Value::Int(sum))
     }
 
     fn primitive_get_ambient(&mut self, arg: Value) -> Result<Value, String> {

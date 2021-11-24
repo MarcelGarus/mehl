@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use super::primitives::PrimitiveKind;
 use std::convert::TryInto;
 
@@ -44,6 +46,80 @@ pub enum Instruction {
     Primitive(Option<PrimitiveKind>),
 }
 
+/// Conversion from instructions to byte code.
+impl Instruction {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        use Bytes::*;
+        use Instruction::*;
+        let quasi_bytes = match self {
+            // 0X: Value creation instructions.
+            CreateInt(int) => vec![U8(0), U64(*int as u64)],
+            CreateString(string) => vec![U8(1), U64(string.len() as u64)]
+                .into_iter()
+                .chain(string.bytes().map(|byte| U8(byte)))
+                .collect_vec(),
+            CreateSmallString(string) => vec![U8(2), U8(string.len() as u8)]
+                .into_iter()
+                .chain(string.bytes().map(|byte| U8(byte)))
+                .collect_vec(),
+            CreateSymbol(symbol) => vec![U8(3)]
+                .into_iter()
+                .chain(symbol.bytes().map(|byte| U8(byte)))
+                .chain(vec![U8(0)].into_iter())
+                .collect_vec(),
+            CreateMap(len) => vec![U8(4), U64(*len)],
+            CreateList(len) => vec![U8(5), U64(*len)],
+            CreateClosure(num_captured_vars) => vec![U8(6), U64(*num_captured_vars)],
+            // 1X: Reference counting.
+            Dup(offset) => vec![U8(10), U64(*offset)],
+            DupNear(offset) => vec![U8(11), U8(*offset)],
+            Drop(offset) => vec![U8(12), U64(*offset)],
+            DropNear(offset) => vec![U8(13), U8(*offset)],
+            // 2X: Stack manipulation.
+            Pop => vec![U8(20)],
+            PopMultipleBelowTop(num) => vec![U8(21), U8(*num)],
+            PushAddress(addr) => vec![U8(22), U64(*addr)],
+            PushFromStack(offset) => vec![U8(23), U64(*offset)],
+            PushNearFromStack(offset) => vec![U8(24), U8(*offset)],
+            // 3X: Control flow.
+            Jump(addr) => vec![U8(30), U64(*addr)],
+            Call => vec![U8(31)],
+            Return => vec![U8(32)],
+            // >=100: Primitives.
+            Primitive(None) => vec![U8(100)],
+            Primitive(Some(kind)) => {
+                vec![U8(101
+                    + PrimitiveKind::all()
+                        .iter()
+                        .position(|it| it == kind)
+                        .unwrap() as u8)]
+            }
+        };
+        let mut bytes = vec![];
+        for quasi_byte in quasi_bytes {
+            quasi_byte.out(&mut bytes);
+        }
+        bytes
+    }
+}
+enum Bytes {
+    U8(u8),
+    U64(u64),
+}
+impl Bytes {
+    fn out(self, out: &mut Vec<u8>) {
+        match self {
+            Bytes::U8(u8) => out.push(u8),
+            Bytes::U64(u64) => {
+                for byte in u64.to_le_bytes() {
+                    out.push(byte);
+                }
+            }
+        }
+    }
+}
+
+/// Conversion from byte code to instructions.
 impl Instruction {
     // TODO: Handle errors better.
     pub fn parse(byte_code: &[u8]) -> Result<(Self, u8), ()> {
@@ -76,14 +152,14 @@ impl<'a> Parser<'a> {
                 self.0 = &self.0[len as usize..];
                 CreateString(string)
             }
-            17 => {
+            2 => {
                 let len = self.get_u8();
                 let string =
                     String::from_utf8(self.0[..len as usize].to_vec()).expect("Invalid UTF8.");
                 self.0 = &self.0[len as usize..];
                 CreateSmallString(string)
             }
-            2 => {
+            3 => {
                 let mut bytes = vec![];
                 loop {
                     match self.get_u8() {
@@ -94,28 +170,29 @@ impl<'a> Parser<'a> {
                 let symbol = String::from_utf8(bytes).expect("Invalid UTF8.");
                 CreateSymbol(symbol)
             }
-            3 => CreateMap(self.get_u64()),
-            4 => CreateList(self.get_u64()),
-            5 => CreateClosure(self.get_u64()),
-            6 => Dup(self.get_u64()),
-            18 => DupNear(self.get_u8()),
-            7 => Drop(self.get_u64()),
-            19 => DropNear(self.get_u8()),
-            8 => Pop,
-            9 => PopMultipleBelowTop(self.get_u8()),
-            10 => PushAddress(self.get_u64()),
-            11 => PushFromStack(self.get_u64()),
-            20 => PushNearFromStack(self.get_u8()),
-            12 => Jump(self.get_u64()),
-            13 => Call,
-            14 => Return,
-            15 => Primitive(None),
-            21 => Primitive(Some(PrimitiveKind::Add)),
-            22 => Primitive(Some(PrimitiveKind::GetAmbient)),
-            25 => Primitive(Some(PrimitiveKind::Panic)),
-            23 => Primitive(Some(PrimitiveKind::Send)),
-            24 => Primitive(Some(PrimitiveKind::Receive)),
-            opcode => panic!("Unknown byte code opcode {}.", opcode),
+            4 => CreateMap(self.get_u64()),
+            5 => CreateList(self.get_u64()),
+            6 => CreateClosure(self.get_u64()),
+            10 => Dup(self.get_u64()),
+            11 => DupNear(self.get_u8()),
+            12 => Drop(self.get_u64()),
+            13 => DropNear(self.get_u8()),
+            20 => Pop,
+            21 => PopMultipleBelowTop(self.get_u8()),
+            22 => PushAddress(self.get_u64()),
+            23 => PushFromStack(self.get_u64()),
+            24 => PushNearFromStack(self.get_u8()),
+            30 => Jump(self.get_u64()),
+            31 => Call,
+            32 => Return,
+            100 => Primitive(None),
+            opcode => {
+                let kinds = PrimitiveKind::all();
+                if opcode < 101 || opcode > 100 + kinds.len() as u8 {
+                    panic!("Unknown byte code opcode {}.", opcode);
+                }
+                Primitive(Some(kinds[(opcode - 101) as usize]))
+            }
         }
     }
 }

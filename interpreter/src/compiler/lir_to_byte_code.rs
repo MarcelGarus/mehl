@@ -5,7 +5,6 @@ use crate::utils::RemoveLast;
 use super::byte_code::*;
 use super::lir;
 use super::lir::Id;
-use super::primitives::PrimitiveKind;
 use std::convert::TryInto;
 
 impl lir::Closure {
@@ -154,8 +153,6 @@ fn push_from_stack_instruction(offset: StackOffset) -> Instruction {
 
 pub trait ByteCodeExt {
     fn current_address(&self) -> Address;
-    fn push_u8(&mut self, u8: u8);
-    fn push_u64(&mut self, u64: u64);
     fn push_instruction(&mut self, instruction: Instruction);
     fn update_jump_target(&mut self, jump_address: Address, target: Address);
 }
@@ -163,101 +160,9 @@ impl ByteCodeExt for ByteCode {
     fn current_address(&self) -> Address {
         self.len() as u64
     }
-    fn push_u8(&mut self, u8: u8) {
-        self.push(u8);
-    }
-    fn push_u64(&mut self, u64: u64) {
-        for byte in &u64.to_le_bytes() {
-            self.push_u8(*byte);
-        }
-    }
     fn push_instruction(&mut self, instruction: Instruction) {
-        use Instruction::*;
         debug!("Pushing instruction {:?}", instruction);
-        match instruction {
-            CreateInt(int) => {
-                self.push_u8(0);
-                self.push_u64(int as u64);
-            }
-            CreateString(string) => {
-                self.push_u8(1);
-                self.push_u64(string.len() as u64);
-                for byte in string.bytes() {
-                    self.push_u8(byte);
-                }
-            }
-            CreateSmallString(string) => {
-                self.push_u8(17);
-                self.push_u8(string.len() as u8);
-                for byte in string.bytes() {
-                    self.push_u8(byte);
-                }
-            }
-            CreateSymbol(symbol) => {
-                self.push_u8(2);
-                for byte in symbol.bytes() {
-                    self.push_u8(byte);
-                }
-                self.push_u8(0);
-            }
-            CreateMap(len) => {
-                self.push_u8(3);
-                self.push_u64(len);
-            }
-            CreateList(len) => {
-                self.push_u8(4);
-                self.push_u64(len);
-            }
-            CreateClosure(num_captured_vars) => {
-                self.push_u8(5);
-                self.push_u64(num_captured_vars);
-            }
-            Dup(offset) => {
-                self.push_u8(6);
-                self.push_u64(offset);
-            }
-            DupNear(offset) => {
-                self.push_u8(18);
-                self.push_u8(offset);
-            }
-            Drop(offset) => {
-                self.push_u8(7);
-                self.push_u64(offset);
-            }
-            DropNear(offset) => {
-                self.push_u8(19);
-                self.push_u8(offset);
-            }
-            Pop => self.push_u8(8),
-            PopMultipleBelowTop(num) => {
-                self.push_u8(9);
-                self.push_u8(num);
-            }
-            PushAddress(addr) => {
-                self.push_u8(10);
-                self.push_u64(addr);
-            }
-            PushFromStack(offset) => {
-                self.push_u8(11);
-                self.push_u64(offset);
-            }
-            PushNearFromStack(offset) => {
-                self.push_u8(20);
-                self.push_u8(offset);
-            }
-            Jump(addr) => {
-                self.push_u8(12);
-                self.push_u64(addr);
-            }
-            Call => self.push_u8(13),
-            Return => self.push_u8(14),
-            Primitive(None) => self.push_u8(15),
-            Primitive(Some(PrimitiveKind::Add)) => self.push_u8(21),
-            Primitive(Some(PrimitiveKind::GetAmbient)) => self.push_u8(22),
-            Primitive(Some(PrimitiveKind::Panic)) => self.push_u8(25),
-            Primitive(Some(PrimitiveKind::Send)) => self.push_u8(23),
-            Primitive(Some(PrimitiveKind::Receive)) => self.push_u8(24),
-        }
+        self.append(&mut instruction.to_bytes());
     }
     fn update_jump_target(&mut self, jump_address: Address, target: Address) {
         let jump_address = jump_address as usize;

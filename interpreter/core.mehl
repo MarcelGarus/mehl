@@ -49,8 +49,8 @@
 
 ## Todo: Bool
 #
-# Boolean values (or bools for short) encode truthfulness. A value is a bool if
-# it's either `:true` or `:false`.
+# Boolean values (or bools for short) encode truthfulness. Only two bools exist:
+# `:true` and `:false`.
 
 ## Input and Output
 
@@ -66,14 +66,13 @@
 # - match
 # - more primitives
 #  - =, !=
-#  - panic
 #  - Int.+, Int.-, Int.*, Int./, Int.mod, Int.pow, Int.neg, Int.>, Int.>=, Int.<, Int.<=
 #  - String.bytes, String.chars
 #  - Map.get, Map.insert, Map.join, Map.keys
 #  - List.get, List.len
 #  - Fiber.new, Fiber.run, Fiber.spawn, Fiber.kill, Fiber.set-priority
 #  - wait
-#  - Channel.send, Channel.receive
+#  - Channel.new
 # - fibers
 # - better Core library
 #  - Panic: assert
