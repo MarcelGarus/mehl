@@ -30,22 +30,27 @@
 # flow between them. When creating such a channel, the VM gives you two ends:
 # One for sending messages and one for receiving them.
 
-[(:send, .) ✨] -> Channel.send
-[(:receive, .) ✨] -> Channel.receive
+[(:channel, .) ✨] -> create-channel
+[(:send, .) ✨] -> send
+[(:receive, .) ✨] -> receive
 
 ## Int
 
-[(:add, .) ✨] -> Int.+
-[(:subtract, .) ✨] -> Int.-
-[(:multiply, .) ✨] -> Int.*
-[(:divide, .) ✨] -> Int./
-[(:modulo, .) ✨] -> Int.mod
+[(:add, .) ✨] -> +
+# [(:subtract, .) ✨] -> Int.-
+# [(:multiply, .) ✨] -> Int.*
+# [(:divide, .) ✨] -> Int./
+# [(:modulo, .) ✨] -> Int.mod
+
+## Lists or tuples
+
+[(:get-item, .) ✨] -> get-item
 
 ## Code
 
-[(:run, .) ✨] -> run
-[(:repeat, .) ✨] -> repeat
-[(:loop, .) ✨] -> loop
+# [(:run, .) ✨] -> run
+# [(:repeat, .) ✨] -> repeat
+# [(:loop, .) ✨] -> loop
 
 ## Todo: Bool
 #
@@ -56,8 +61,8 @@
 
 [:stdin ambient] -> stdin
 [:stdout ambient] -> stdout
-[(stdout, .) Channel.send] -> print
-[stdin Channel.receive] -> read
+[(stdout, .) send] -> print
+[stdin receive] -> read
 
 ## Todo: Time
 

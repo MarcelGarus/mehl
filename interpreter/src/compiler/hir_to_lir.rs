@@ -14,6 +14,7 @@ impl hir::Code {
                 for (id, _) in self.iter() {
                     used.remove(&id);
                 }
+                used.remove(&self.in_);
                 let mut used = used.into_iter().collect::<Vec<_>>();
                 used.sort();
                 used

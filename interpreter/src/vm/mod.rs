@@ -4,4 +4,4 @@ mod vm;
 
 pub use fiber::{Fiber, FiberStatus};
 pub use utils::Value;
-pub use vm::Vm;
+pub use vm::{Vm, VmOperation, VmStatus};

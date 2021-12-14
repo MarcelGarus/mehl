@@ -3,8 +3,9 @@ mod utils;
 mod vm;
 
 use crate::compiler::*;
-use crate::vm::{Fiber, FiberStatus, Value};
+use crate::vm::{Value, Vm, VmOperation, VmStatus};
 use colored::Colorize;
+use itertools::Itertools;
 use log::debug;
 use lspower::jsonrpc::Result;
 use lspower::lsp::*;
@@ -55,10 +56,12 @@ async fn main() {
             debug!("AST: {}\n", &ast);
 
             let mut hir = ast.compile_to_hir();
+            debug!("Unoptimized HIR: {}", hir);
             hir.optimize();
             debug!("HIR: {}", hir);
 
             let mut lir = hir.compile_to_lir();
+            debug!("Unoptimized LIR: {}", lir);
             lir.optimize();
             debug!("LIR: {}", lir);
 
@@ -70,76 +73,64 @@ async fn main() {
             let mut ambients = HashMap::new();
             ambients.insert("stdout".into(), Value::ChannelSendEnd(0));
             ambients.insert("stdin".into(), Value::ChannelReceiveEnd(1));
-            let mut fiber = Fiber::new(byte_code, ambients, Value::unit());
+            let mut vm = Vm::new(byte_code, ambients);
             loop {
-                fiber.run(30);
-                match fiber.status() {
-                    FiberStatus::Running => {}
-                    FiberStatus::Done(value) => {
-                        println!("{}", format!("Done running: {}", value).green());
+                vm.run(30);
+                let operations = vm
+                    .pending_operations()
+                    .into_iter()
+                    .map(|it| (*it).clone())
+                    .collect_vec();
+                debug!("Vm: {:?}", vm);
+                for operation in operations {
+                    match operation {
+                        VmOperation::Send(channel_id, message) => match channel_id {
+                            0 => {
+                                let mut out = stdout();
+                                out.write(
+                                    if let Value::String(string) = &message {
+                                        string.clone()
+                                    } else {
+                                        message.to_string()
+                                    }
+                                    .as_bytes(),
+                                )
+                                .unwrap();
+                                out.flush().unwrap();
+                                vm.resolve_send(channel_id, message);
+                            }
+                            _ => panic!("Unknown channel id {}.", channel_id),
+                        },
+                        VmOperation::Receive(channel_id) => match channel_id {
+                            1 => {
+                                let mut input = String::new();
+                                std::io::stdin()
+                                    .read_line(&mut input)
+                                    .expect("Couldn't read line.");
+                                vm.resolve_receive(channel_id, Value::String(input));
+                            }
+                            _ => panic!("Unknown channel id {}.", channel_id),
+                        },
+                    }
+                }
+                match vm.status() {
+                    VmStatus::Running => {}
+                    VmStatus::Done(value) => {
+                        println!(
+                            "{}",
+                            format!("Done running: {}", value).bright_green().bold()
+                        );
                         break;
                     }
-                    FiberStatus::Panicked(value) => {
-                        println!("{}", format!("Panicked: {}", value).red());
+                    VmStatus::Panicked(value) => {
+                        println!("{}", format!("Panicked: {}", value).bright_red().bold());
                         break;
                     }
-                    FiberStatus::Sending(channel_id, message) => match channel_id {
-                        0 => {
-                            let mut out = stdout();
-                            out.write(
-                                if let Value::String(string) = message {
-                                    string
-                                } else {
-                                    message.to_string()
-                                }
-                                .as_bytes(),
-                            )
-                            .unwrap();
-                            out.flush().unwrap();
-                            fiber.resolve_sending();
-                        }
-                        _ => panic!("Unknown channel id {}.", channel_id),
-                    },
-                    FiberStatus::Receiving(channel_id) => match channel_id {
-                        1 => {
-                            let mut input = String::new();
-                            std::io::stdin()
-                                .read_line(&mut input)
-                                .expect("Couldn't read line.");
-                            fiber.resolve_receiving(Value::String(input));
-                        }
-                        _ => panic!("Unknown channel id {}.", channel_id),
-                    },
+                    VmStatus::WaitingForPendingOperations => {
+                        panic!("Operations should have been handled above.")
+                    }
                 }
             }
-            debug!("{:?}", fiber);
-
-            // let mut fiber = runner::Runtime::default();
-            // let context = runner::Context::root(&mut fiber);
-            // let context = match context.run(&mut fiber, core) {
-            //     Ok(context) => context,
-            //     Err(err) => panic!("The core library panicked: {}", err),
-            // };
-            // let context = match context.run(&mut fiber, user) {
-            //     Ok(context) => context,
-            //     Err(err) => {
-            //         println!(
-            //             "{}\n{}{}",
-            //             "The program panicked.".red(),
-            //             "Message: ".red(),
-            //             err.to_string().bright_red().bold()
-            //         );
-            //         return;
-            //     }
-            // };
-
-            // let output = context.dot;
-            // println!(
-            //     "{}\n{}{}",
-            //     "The program successfully finished.".green(),
-            //     "Output: ".green(),
-            //     output.to_string().bright_green().bold(),
-            // );
         }
         Mehl::Lsp => {
             // println!("Running Mehl LSP. 🍞");

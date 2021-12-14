@@ -1,11 +1,12 @@
 use super::primitives::PrimitiveKind;
 use itertools::Itertools;
+use log::debug;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 pub type Id = u32;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Statement {
     Int(i64),
     String(String),
@@ -23,7 +24,7 @@ pub enum Statement {
     },
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Code {
     pub in_: Id,
     pub out: Id,
@@ -199,7 +200,7 @@ impl Code {
     /// 3 = primitive_add 1 2
     /// 4 = primitive_print 3
     /// 5 = symbol :foo
-    /// 6 = primmitive_print 5
+    /// 6 = primitive_print 5
     /// ```
     ///
     /// Calling `replace_range(1, 3, [number 3], {3, 1})` turns it into this:
@@ -218,12 +219,10 @@ impl Code {
         replacement: Vec<Statement>,
         reference_replacements: HashMap<Id, Id>,
     ) {
-        // println!(
-        //     "Optimizer: Replacing {} len {} with {} statements.",
-        //     start,
-        //     length,
-        //     replacement.len()
-        // );
+        debug!(
+            "Optimizer: Replacing {} len {} with {:?}. Replacements: {:?}",
+            start, length, replacement, reference_replacements
+        );
         let mut statements = vec![];
 
         let start = start;
@@ -269,9 +268,13 @@ impl Code {
         self.statements = statements;
         self.in_ = transform(self.in_);
         self.out = transform(self.out);
+
+        debug!("Now the HIR is this: {}", self);
     }
 
     pub fn replace_ids<F: Fn(Id) -> Id>(&mut self, transform: &F) {
+        self.in_ = transform(self.in_);
+        self.out = transform(self.out);
         for (_, statement) in self.iter_mut() {
             statement.replace_ids(transform);
         }

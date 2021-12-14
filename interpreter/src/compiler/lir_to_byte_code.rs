@@ -60,12 +60,15 @@ impl lir::Statement {
                     let after_body_addr = out.current_address();
                     out.update_jump_target(jump_addr, after_body_addr);
                     out.push_instruction(PushAddress(body_addr));
-                    stack.push(0);
+                    stack.push(999999999);
                     for id in &closure.captured {
                         out.push_instruction(push_from_stack_instruction(stack.reference_id(*id)));
                         stack.push(*id);
                     }
                     out.push_instruction(CreateClosure(closure.captured.len() as u64));
+                    for _ in 0..(closure.captured.len() + 1) {
+                        stack.remove_last();
+                    }
                     stack.push(*id);
                 }
                 lir::Expr::Map(map) => {
@@ -179,6 +182,7 @@ trait StackModelExt {
 }
 impl StackModelExt for StackModel {
     fn reference_id(&self, id: Id) -> StackOffset {
+        // println!("Finding {} in stack model ({:?})", id, self);
         self.iter().rev().position(|it| *it == id).unwrap() as StackOffset
     }
 }

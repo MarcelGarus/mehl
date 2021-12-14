@@ -1,3 +1,5 @@
+use log::{debug, warn};
+
 use super::{hir::*, primitives::PrimitiveKind};
 use std::collections::{HashMap, HashSet};
 
@@ -174,7 +176,9 @@ impl Statement {
 
 impl Code {
     fn inline_code(&mut self) {
+        debug!("HIR before inlining: {}", self);
         self.inline_code_helper(&im::HashMap::new());
+        debug!("HIR after inlining: {}", self);
     }
     fn inline_code_helper(&mut self, statements: &im::HashMap<Id, Statement>) {
         let mut statements = statements.clone();
@@ -195,7 +199,7 @@ impl Code {
                     });
 
                     let mut updates = HashMap::new();
-                    updates.insert(id, code.out + shift);
+                    updates.insert(id, code.out);
 
                     self.replace_range(
                         id,
@@ -263,7 +267,7 @@ impl Code {
             //     Some(Statement::Int(sum))
             // }
             _ => {
-                println!("Unknown pure primitive {:?}.", kind);
+                warn!("Unknown pure primitive {:?}.", kind);
                 None
             }
         }

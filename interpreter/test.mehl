@@ -1,47 +1,16 @@
 "Enter your name: " print
 read print
 
-(1, 2, 3) Int.+ print
+(1, 2, 3) + print
 
-#:nonexistent ambient
+2 create-channel => a
+a print
+(a, 0) get-item => sender
+(a, 1) get-item => receiver
+
+(sender, "Hey") send
+receiver receive print
+
 ...
 
-# ({:foo, 4, :bar, 4},
-#   :foo, [],
-#   {:foo, :?a, :bar, :?a}, [("Bar", a) print],
-#   {}, ["Blub" print]
-# ) match
-
-# ((:true, :false) or, :false) and not print
-
-# [ "Hello, repeating world!" print ] (., 3) repeat
-
-# (1, 2) + wait
-
-# ...
-
-# Adding numbers
-
-#(1, 2) List[Int].+
-
-# Iterable with cycle, map, filter, take, do
-
-# { :name, :List.Iter, :in, Any, :out, Any, :body, [[]] } fun
-# An iterable: { :iter, [] }
-# { :name, :List. }
-
-# (1, 2, 3) List.Iter
-#   Iter.cycle
-#   [(., 2) Int.*] Iter.map
-#   [(., 10) Int.>] Iter.filter
-#   (., 5) Iter.take
-#   [print] Iter.do
-
-# Adding numbers
-
-#(1, 2) +
-#(1, 2, 3, 4, 5) (:iter-over-list, .) magic-primitive # TODO
-
-# Types
-
-#"Hello, world!" type print
+# [read eval print] loop

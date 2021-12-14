@@ -16,7 +16,7 @@ pub struct Fiber {
     status: FiberStatus,
     ip: Pointer, // instruction pointer
     stack: Vec<StackEntry>,
-    heap: HashMap<Pointer, Object>, // TODO: dynamically allocate objects
+    heap: HashMap<Pointer, Object>, // TODO: use the actual real pointers objects
     next_heap_address: u64,
 }
 
@@ -25,6 +25,7 @@ pub enum FiberStatus {
     Running,
     Done(Value),
     Panicked(Value),
+    CreatingChannel(u64),
     Sending(ChannelId, Value),
     Receiving(ChannelId),
 }
@@ -79,6 +80,7 @@ impl Fiber {
     }
 
     fn get_from_stack(&self, offset: StackOffset) -> StackEntry {
+        debug!("Getting offset {} from stack {:?}.", offset, self.stack);
         self.stack[self.stack.len() - (offset as usize) - 1].clone()
     }
     fn get_from_heap(&mut self, address: Pointer) -> &mut Object {
@@ -219,10 +221,10 @@ impl Fiber {
                 Instruction::parse(&self.byte_code[self.ip as usize..])
                     .expect("Couldn't parse instruction.");
             debug!("Next instruction: {:?}", &instruction);
+            self.ip += num_bytes_consumed as u64;
             self.run_instruction(instruction);
             debug!("Fiber: {:?}", self);
 
-            self.ip += num_bytes_consumed as u64;
             if self.ip >= self.byte_code.len() as u64 {
                 self.status = FiberStatus::Done(match self.stack.pop().unwrap() {
                     StackEntry::AddressInByteCode(_) => panic!("Can only return values."),
@@ -415,8 +417,12 @@ impl Fiber {
 
                 let primitive_result = match kind {
                     PrimitiveKind::Add => self.primitive_add(arg).map(Some),
+                    PrimitiveKind::GetItem => self.primitive_get_item(arg).map(Some),
                     PrimitiveKind::GetAmbient => self.primitive_get_ambient(arg).map(Some),
                     PrimitiveKind::Panic => self.primitive_panic(arg).map(|_| None),
+                    PrimitiveKind::CreateChannel => {
+                        self.primitive_create_channel(arg).map(|_| None)
+                    }
                     PrimitiveKind::Send => self.primitive_send(arg).map(|_| None),
                     PrimitiveKind::Receive => self.primitive_receive(arg).map(|_| None),
                 };
@@ -436,16 +442,38 @@ impl Fiber {
     // Primitives.
 
     fn primitive_add(&mut self, arg: Value) -> Result<Value, String> {
-        let list = arg.list().needed("Add needs a list.")?;
+        let list = arg.list().needed("add needs a list")?;
         let mut ints = vec![];
         for item in list {
             ints.push(
                 item.int()
-                    .needed("Add called with a list that contains not only numbers.")?,
+                    .needed("add needs a list that contains only numbers")?,
             );
         }
         let sum = ints.into_iter().fold(0, |a, b| a + b);
         Ok(Value::Int(sum))
+    }
+
+    fn primitive_get_item(&mut self, arg: Value) -> Result<Value, String> {
+        let list = arg.list().needed("get-item needs a list")?;
+        let (list, index) = list
+            .tuple2()
+            .needed("get-item needs a list with two values")?;
+        let list = list
+            .list()
+            .needed("get-item needs a list with a list and an index")?;
+        let index = index
+            .int()
+            .needed("get-item needs a list with a list and an index")?;
+        if index < 0 || index >= list.len() as i64 {
+            return Err(format!(
+                "get-item received list {} and index {}, so the index is out of bounds",
+                Value::List(list),
+                index
+            ));
+        }
+        let item = list[index as usize].clone();
+        Ok(item)
     }
 
     fn primitive_get_ambient(&mut self, arg: Value) -> Result<Value, String> {
@@ -459,6 +487,12 @@ impl Fiber {
 
     fn primitive_panic(&mut self, arg: Value) -> Result<(), String> {
         self.status = FiberStatus::Panicked(arg);
+        Ok(())
+    }
+
+    fn primitive_create_channel(&mut self, arg: Value) -> Result<(), String> {
+        let capacity = arg.int().needed("CreateChannel needs an int.")?;
+        self.status = FiberStatus::CreatingChannel(capacity as u64);
         Ok(())
     }
 
@@ -483,6 +517,15 @@ impl Fiber {
     }
 
     // Resolve status.
+
+    pub fn resolve_creating_channel(&mut self, id: ChannelId) {
+        let address = self.import(Value::List(vec![
+            Value::ChannelSendEnd(id),
+            Value::ChannelReceiveEnd(id),
+        ]));
+        self.stack.push(StackEntry::AddressInHeap(address));
+        self.status = FiberStatus::Running;
+    }
 
     pub fn resolve_sending(&mut self) {
         let address = self.import(Value::unit());
